@@ -12,26 +12,19 @@ struct ContentView: View {
     @State private var settledOffsetSeconds: Double = .zero
 
     private let pointsPerSecond: CGFloat = 14
-    private let calendar = Calendar.current
 
     var body: some View {
         TimelineView(.animation(minimumInterval: 1 / 30, paused: false)) { context in
             GeometryReader { proxy in
-                let size = proxy.size
                 let totalOffset = settledOffsetSeconds - (dragTranslation / pointsPerSecond)
                 let centerDate = context.date.addingTimeInterval(totalOffset)
 
                 ZStack {
-                    WheelBackgroundView()
+                    MeterPanelBackgroundView()
 
-                    WheelGridView(
-                        centerDate: centerDate,
-                        size: size,
-                        pointsPerSecond: pointsPerSecond,
-                        calendar: calendar
-                    )
+                    CounterWheelsRowView(centerDate: centerDate)
 
-                    MagnifierView(date: centerDate)
+                    GlassLineMagnifierView(date: centerDate)
                 }
                 .contentShape(.rect)
                 .gesture(dragGesture)
@@ -49,190 +42,419 @@ struct ContentView: View {
                 let dragSeconds = -(value.translation.height / pointsPerSecond)
                 let extraMomentum = -((value.predictedEndTranslation.height - value.translation.height) / pointsPerSecond)
 
-                withAnimation(.spring(duration: 0.55, bounce: 0.24)) {
-                    settledOffsetSeconds += Double(dragSeconds + (extraMomentum * 0.18))
+                withAnimation(.spring(duration: 0.55, bounce: 0.22)) {
+                    settledOffsetSeconds += Double(dragSeconds + (extraMomentum * 0.2))
                 }
             }
     }
 }
 
-private struct WheelBackgroundView: View {
+private struct MeterPanelBackgroundView: View {
     var body: some View {
         ZStack {
             LinearGradient(
                 colors: [
-                    Color(red: 0.05, green: 0.06, blue: 0.09),
-                    Color(red: 0.09, green: 0.11, blue: 0.16),
-                    Color(red: 0.03, green: 0.04, blue: 0.07)
+                    Color(red: 0.05, green: 0.05, blue: 0.05),
+                    Color(red: 0.10, green: 0.09, blue: 0.08),
+                    Color(red: 0.03, green: 0.03, blue: 0.03)
                 ],
                 startPoint: .top,
                 endPoint: .bottom
             )
 
-            RadialGradient(
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                .fill(.clear)
+                .padding()
+                .background {
+                    RoundedRectangle(cornerRadius: 28, style: .continuous)
+                        .strokeBorder(
+                            LinearGradient(
+                                colors: [Color.white.opacity(0.22), Color.black.opacity(0.4)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1.1
+                        )
+                        .padding()
+                }
+
+            LinearGradient(
                 colors: [
-                    Color.white.opacity(0.20),
-                    Color.white.opacity(0.03),
-                    .clear
+                    Color.black.opacity(0.22),
+                    .clear,
+                    Color.black.opacity(0.22)
                 ],
-                center: .center,
-                startRadius: 10,
-                endRadius: 420
+                startPoint: .leading,
+                endPoint: .trailing
             )
-            .blendMode(.screen)
         }
     }
 }
 
-private struct WheelGridView: View {
+private struct CounterWheelsRowView: View {
     let centerDate: Date
-    let size: CGSize
-    let pointsPerSecond: CGFloat
-    let calendar: Calendar
+    private let calendar = Calendar.current
 
     var body: some View {
-        let centerY = size.height / 2
-        let centerSeconds = centerDate.timeIntervalSinceReferenceDate
-        let centerWhole = floor(centerSeconds)
-        let centerFraction = centerSeconds - centerWhole
-        let visibleTicks = Int((size.height / pointsPerSecond).rounded(.up)) + 36
+        GeometryReader { proxy in
+            let width = proxy.size.width
+            let height = proxy.size.height
+            let wheelWidth = max(min((width - 56) / 6, 88), 50)
+            let wheelHeight = min(max(height * 0.82, 360), 760)
+
+            HStack(spacing: 4) {
+                CounterWheelView(
+                    title: "YR",
+                    width: wheelWidth,
+                    height: wheelHeight,
+                    tint: .orange,
+                    labelProvider: YearLabelProvider(calendar: calendar),
+                    date: centerDate
+                )
+
+                CounterWheelView(
+                    title: "MO",
+                    width: wheelWidth,
+                    height: wheelHeight,
+                    tint: .mint,
+                    labelProvider: MonthLabelProvider(calendar: calendar),
+                    date: centerDate
+                )
+
+                CounterWheelView(
+                    title: "DY",
+                    width: wheelWidth,
+                    height: wheelHeight,
+                    tint: .cyan,
+                    labelProvider: DayLabelProvider(calendar: calendar),
+                    date: centerDate
+                )
+
+                CounterWheelView(
+                    title: "HR",
+                    width: wheelWidth,
+                    height: wheelHeight,
+                    tint: .yellow,
+                    labelProvider: HourLabelProvider(calendar: calendar),
+                    date: centerDate
+                )
+
+                CounterWheelView(
+                    title: "MN",
+                    width: wheelWidth,
+                    height: wheelHeight,
+                    tint: .white,
+                    labelProvider: MinuteLabelProvider(calendar: calendar),
+                    date: centerDate
+                )
+
+                CounterWheelView(
+                    title: "SC",
+                    width: wheelWidth,
+                    height: wheelHeight,
+                    tint: .red,
+                    labelProvider: SecondLabelProvider(calendar: calendar),
+                    date: centerDate
+                )
+            }
+            .frame(width: width, height: height)
+        }
+    }
+}
+
+private struct CounterWheelView<Provider: WheelLabelProvider>: View {
+    let title: String
+    let width: CGFloat
+    let height: CGFloat
+    let tint: Color
+    let labelProvider: Provider
+    let date: Date
+
+    var body: some View {
+        let rowHeight = max(height / 12.5, 32)
+        let centerY = height / 2
+        let visibleRows = Int((height / rowHeight).rounded(.up)) + 6
+        let phase = labelProvider.phase(for: date)
 
         ZStack {
-            ForEach(-visibleTicks...visibleTicks, id: \.self) { index in
-                let y = centerY + (CGFloat(Double(index) - centerFraction) * pointsPerSecond)
-                let tickDate = Date(timeIntervalSinceReferenceDate: centerWhole + Double(index))
-                let descriptor = TickDescriptor(date: tickDate, calendar: calendar)
-                let distanceRatio = min(abs((y - centerY) / (size.height * 0.5)), 1)
-
-                TickRowView(descriptor: descriptor, width: size.width)
-                    .scaleEffect(1 - (distanceRatio * 0.24))
-                    .opacity(1 - (distanceRatio * 0.82))
-                    .rotation3DEffect(
-                        .degrees(Double((y - centerY) / (size.height * 0.5)) * -58),
-                        axis: (x: 1, y: 0, z: 0),
-                        perspective: 0.84
+            RoundedRectangle(cornerRadius: width * 0.22, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color.black.opacity(0.74),
+                            Color(red: 0.18, green: 0.17, blue: 0.15),
+                            Color.black.opacity(0.78)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
                     )
-                    .position(x: size.width / 2, y: y)
+                )
+                .overlay {
+                    RoundedRectangle(cornerRadius: width * 0.22, style: .continuous)
+                        .strokeBorder(
+                            LinearGradient(
+                                colors: [Color.white.opacity(0.32), Color.black.opacity(0.42)],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            ),
+                            lineWidth: 1
+                        )
+                }
+                .shadow(color: .black.opacity(0.45), radius: 16, y: 9)
+
+            ForEach(-visibleRows...visibleRows, id: \.self) { offset in
+                let y = centerY + ((CGFloat(offset) - phase.fractional) * rowHeight)
+                let content = labelProvider.row(for: date, relativeOffset: offset)
+                let distance = min(abs((y - centerY) / (height * 0.5)), 1)
+                let majorOpacity = content.isMajor ? 1.0 : 0.52
+
+                CounterWheelRowView(
+                    value: content.label,
+                    tickStrength: content.isMajor ? 1.0 : 0.55,
+                    tint: tint
+                )
+                .frame(width: width * 0.86, height: rowHeight)
+                .scaleEffect(1 - (distance * 0.22))
+                .opacity((1 - (distance * 0.84)) * majorOpacity)
+                .rotation3DEffect(
+                    .degrees(Double((y - centerY) / (height * 0.5)) * -54),
+                    axis: (x: 1, y: 0, z: 0),
+                    perspective: 0.86
+                )
+                .position(x: width / 2, y: y)
             }
+
+            VStack {
+                Text(title)
+                    .font(.caption2.monospaced())
+                    .foregroundStyle(tint.opacity(0.85))
+                Spacer()
+            }
+            .padding(.top, 8)
         }
-        .mask {
+        .frame(width: width, height: height)
+        .clipShape(.rect(cornerRadius: width * 0.22))
+        .overlay {
             LinearGradient(
                 stops: [
-                    .init(color: .clear, location: 0.0),
-                    .init(color: .white, location: 0.12),
-                    .init(color: .white, location: 0.88),
-                    .init(color: .clear, location: 1.0)
+                    .init(color: Color.black.opacity(0.7), location: 0.0),
+                    .init(color: .clear, location: 0.18),
+                    .init(color: .clear, location: 0.82),
+                    .init(color: Color.black.opacity(0.7), location: 1.0)
                 ],
                 startPoint: .top,
                 endPoint: .bottom
             )
+            .clipShape(.rect(cornerRadius: width * 0.22))
         }
     }
 }
 
-private struct TickRowView: View {
-    let descriptor: TickDescriptor
-    let width: CGFloat
+private struct CounterWheelRowView: View {
+    let value: String
+    let tickStrength: CGFloat
+    let tint: Color
 
     var body: some View {
-        HStack(spacing: width * 0.02) {
-            Capsule(style: .continuous)
-                .fill(descriptor.color)
-                .frame(width: width * descriptor.lengthFactor, height: descriptor.thickness)
-                .shadow(color: descriptor.color.opacity(0.55), radius: 4, y: 0)
+        HStack {
+            Rectangle()
+                .fill(tint.opacity(0.9))
+                .frame(width: 8, height: max(1.2, 10 * tickStrength))
+                .shadow(color: tint.opacity(0.55), radius: 2)
 
-            Text(descriptor.label)
-                .font(descriptor.font)
-                .foregroundStyle(descriptor.color)
+            Text(value)
+                .font(.system(.title3, design: .monospaced))
+                .bold()
+                .foregroundStyle(.white)
                 .lineLimit(1)
-                .minimumScaleFactor(0.75)
-                .shadow(color: .black.opacity(0.55), radius: 1.5, y: 1)
+                .minimumScaleFactor(0.7)
 
             Spacer(minLength: 0)
         }
-        .frame(width: width * 0.78)
     }
 }
 
-private struct MagnifierView: View {
+private struct GlassLineMagnifierView: View {
     let date: Date
 
     var body: some View {
         GeometryReader { proxy in
             let size = proxy.size
-            let boxHeight = max(size.height * 0.14, 84)
+            let height = max(size.height * 0.09, 72)
 
-            RoundedRectangle(cornerRadius: boxHeight * 0.24, style: .continuous)
-                .fill(.thinMaterial.opacity(0.84))
+            RoundedRectangle(cornerRadius: height * 0.28, style: .continuous)
+                .fill(.ultraThinMaterial.opacity(0.36))
                 .overlay {
-                    RoundedRectangle(cornerRadius: boxHeight * 0.24, style: .continuous)
+                    RoundedRectangle(cornerRadius: height * 0.28, style: .continuous)
                         .strokeBorder(
                             LinearGradient(
-                                colors: [Color.white.opacity(0.95), Color.white.opacity(0.08)],
+                                colors: [Color.white.opacity(0.7), Color.white.opacity(0.08)],
                                 startPoint: .top,
                                 endPoint: .bottom
                             ),
-                            lineWidth: 1.25
+                            lineWidth: 1
                         )
                 }
                 .overlay {
-                    VStack {
-                        Text(date, format: .dateTime.year().month(.abbreviated).day().weekday(.abbreviated))
-                            .font(.title3)
-                            .bold()
-                            .foregroundStyle(.white)
-                        Text(date, format: .dateTime.hour(.twoDigits(amPM: .omitted)).minute(.twoDigits).second(.twoDigits))
-                            .font(.largeTitle.monospacedDigit())
-                            .bold()
-                            .foregroundStyle(.white)
-                    }
-                    .padding(.horizontal)
+                    Rectangle()
+                        .fill(Color.white.opacity(0.38))
+                        .frame(height: 1)
                 }
-                .shadow(color: .black.opacity(0.55), radius: 28, y: 12)
-                .frame(width: size.width * 0.9, height: boxHeight)
+                .overlay {
+                    Text(date, format: .dateTime.year().month(.twoDigits).day().hour(.twoDigits(amPM: .omitted)).minute(.twoDigits).second(.twoDigits))
+                        .font(.headline.monospacedDigit())
+                        .bold()
+                        .foregroundStyle(.white)
+                        .shadow(color: .black.opacity(0.45), radius: 1, y: 1)
+                }
+                .frame(width: size.width - 26, height: height)
                 .position(x: size.width / 2, y: size.height / 2)
+                .shadow(color: .black.opacity(0.28), radius: 18, y: 10)
         }
         .allowsHitTesting(false)
     }
 }
 
-private struct TickDescriptor {
+private struct WheelPhase {
+    let fractional: CGFloat
+}
+
+private struct WheelRowContent {
     let label: String
-    let lengthFactor: CGFloat
-    let thickness: CGFloat
-    let color: Color
-    let font: Font
+    let isMajor: Bool
+}
 
-    init(date: Date, calendar: Calendar) {
-        let style = TimeWheelTickStyle.make(for: date, calendar: calendar)
+private protocol WheelLabelProvider {
+    func phase(for date: Date) -> WheelPhase
+    func row(for date: Date, relativeOffset: Int) -> WheelRowContent
+}
 
-        label = style.label
-        lengthFactor = style.lengthFactor
-        thickness = style.thickness
+private struct YearLabelProvider: WheelLabelProvider {
+    let calendar: Calendar
 
-        switch style.tier {
-        case .year:
-            color = .orange
-            font = .headline
-        case .month:
-            color = .mint
-            font = .subheadline
-        case .day:
-            color = .cyan
-            font = .subheadline
-        case .hour:
-            color = .white
-            font = .body
-        case .minute:
-            color = .white.opacity(0.85)
-            font = .caption
-        case .tenSecond:
-            color = .white.opacity(0.55)
-            font = .caption2
-        case .second:
-            color = .white.opacity(0.32)
-            font = .caption2
-        }
+    func phase(for date: Date) -> WheelPhase {
+        let dayOfYear = calendar.ordinality(of: .day, in: .year, for: date) ?? 1
+        let dayCount = calendar.range(of: .day, in: .year, for: date)?.count ?? 365
+        let hour = calendar.component(.hour, from: date)
+        let minute = calendar.component(.minute, from: date)
+        let second = calendar.component(.second, from: date)
+        let nanosecond = calendar.component(.nanosecond, from: date)
+
+        let secondProgress = Double(second) + (Double(nanosecond) / 1_000_000_000)
+        let dayProgress = (Double(hour) + (Double(minute) / 60) + (secondProgress / 3600)) / 24
+        let fraction = (Double(dayOfYear - 1) + dayProgress) / Double(max(dayCount, 1))
+
+        return WheelPhase(fractional: CGFloat(fraction))
+    }
+
+    func row(for date: Date, relativeOffset: Int) -> WheelRowContent {
+        let adjusted = calendar.date(byAdding: .year, value: relativeOffset, to: date) ?? date
+        return WheelRowContent(label: adjusted.formatted(.dateTime.year()), isMajor: true)
+    }
+}
+
+private struct MonthLabelProvider: WheelLabelProvider {
+    let calendar: Calendar
+
+    func phase(for date: Date) -> WheelPhase {
+        let day = calendar.component(.day, from: date)
+        let hour = calendar.component(.hour, from: date)
+        let minute = calendar.component(.minute, from: date)
+        let second = calendar.component(.second, from: date)
+        let nanosecond = calendar.component(.nanosecond, from: date)
+        let dayCount = calendar.range(of: .day, in: .month, for: date)?.count ?? 30
+
+        let secondProgress = Double(second) + (Double(nanosecond) / 1_000_000_000)
+        let dayProgress = (Double(hour) + (Double(minute) / 60) + (secondProgress / 3600)) / 24
+        let fraction = (Double(day - 1) + dayProgress) / Double(max(dayCount, 1))
+
+        return WheelPhase(fractional: CGFloat(fraction))
+    }
+
+    func row(for date: Date, relativeOffset: Int) -> WheelRowContent {
+        let adjusted = calendar.date(byAdding: .month, value: relativeOffset, to: date) ?? date
+        return WheelRowContent(label: adjusted.formatted(.dateTime.month(.abbreviated)), isMajor: true)
+    }
+}
+
+private struct DayLabelProvider: WheelLabelProvider {
+    let calendar: Calendar
+
+    func phase(for date: Date) -> WheelPhase {
+        let hour = calendar.component(.hour, from: date)
+        let minute = calendar.component(.minute, from: date)
+        let second = calendar.component(.second, from: date)
+        let nanosecond = calendar.component(.nanosecond, from: date)
+
+        let secondProgress = Double(second) + (Double(nanosecond) / 1_000_000_000)
+        let fraction = (Double(hour) + (Double(minute) / 60) + (secondProgress / 3600)) / 24
+
+        return WheelPhase(fractional: CGFloat(fraction))
+    }
+
+    func row(for date: Date, relativeOffset: Int) -> WheelRowContent {
+        let adjusted = calendar.date(byAdding: .day, value: relativeOffset, to: date) ?? date
+        let day = adjusted.formatted(.dateTime.day())
+        let weekday = adjusted.formatted(.dateTime.weekday(.narrow))
+        return WheelRowContent(label: "\(day) \(weekday)", isMajor: true)
+    }
+}
+
+private struct HourLabelProvider: WheelLabelProvider {
+    let calendar: Calendar
+
+    func phase(for date: Date) -> WheelPhase {
+        let minute = calendar.component(.minute, from: date)
+        let second = calendar.component(.second, from: date)
+        let nanosecond = calendar.component(.nanosecond, from: date)
+
+        let secondProgress = Double(second) + (Double(nanosecond) / 1_000_000_000)
+        let fraction = (Double(minute) + (secondProgress / 60)) / 60
+
+        return WheelPhase(fractional: CGFloat(fraction))
+    }
+
+    func row(for date: Date, relativeOffset: Int) -> WheelRowContent {
+        let adjusted = calendar.date(byAdding: .hour, value: relativeOffset, to: date) ?? date
+        return WheelRowContent(label: adjusted.formatted(.dateTime.hour(.twoDigits(amPM: .omitted))), isMajor: true)
+    }
+}
+
+private struct MinuteLabelProvider: WheelLabelProvider {
+    let calendar: Calendar
+
+    func phase(for date: Date) -> WheelPhase {
+        let second = calendar.component(.second, from: date)
+        let nanosecond = calendar.component(.nanosecond, from: date)
+        let fraction = (Double(second) + (Double(nanosecond) / 1_000_000_000)) / 60
+        return WheelPhase(fractional: CGFloat(fraction))
+    }
+
+    func row(for date: Date, relativeOffset: Int) -> WheelRowContent {
+        let adjusted = calendar.date(byAdding: .minute, value: relativeOffset, to: date) ?? date
+        let second = calendar.component(.second, from: adjusted)
+        return WheelRowContent(
+            label: adjusted.formatted(.dateTime.minute()),
+            isMajor: second == 0
+        )
+    }
+}
+
+private struct SecondLabelProvider: WheelLabelProvider {
+    let calendar: Calendar
+
+    func phase(for date: Date) -> WheelPhase {
+        let nanosecond = calendar.component(.nanosecond, from: date)
+        return WheelPhase(fractional: CGFloat(Double(nanosecond) / 1_000_000_000))
+    }
+
+    func row(for date: Date, relativeOffset: Int) -> WheelRowContent {
+        let adjusted = calendar.date(byAdding: .second, value: relativeOffset, to: date) ?? date
+        let second = calendar.component(.second, from: adjusted)
+        return WheelRowContent(
+            label: adjusted.formatted(.dateTime.second()),
+            isMajor: second.isMultiple(of: 10)
+        )
     }
 }
 
