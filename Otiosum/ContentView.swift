@@ -99,13 +99,20 @@ private struct CounterWheelsRowView: View {
         GeometryReader { proxy in
             let width = proxy.size.width
             let height = proxy.size.height
-            let wheelWidth = max(min((width - 56) / 6, 88), 50)
             let wheelHeight = min(max(height * 0.82, 360), 760)
+            let spacing: CGFloat = 4
+            let horizontalInset: CGFloat = 10
+            let totalSpacing = spacing * 6
+            let availableWidth = max(width - totalSpacing - (horizontalInset * 2), 280)
+            let widthUnit = availableWidth / 7.7
+            let yearWidth = widthUnit * 1.5
+            let weekdayWidth = widthUnit * 1.45
+            let numericWidth = widthUnit
 
-            HStack(spacing: 4) {
+            HStack(spacing: spacing) {
                 CounterWheelView(
                     title: "YR",
-                    width: wheelWidth,
+                    width: yearWidth,
                     height: wheelHeight,
                     tint: .orange,
                     labelProvider: YearLabelProvider(calendar: calendar),
@@ -114,7 +121,7 @@ private struct CounterWheelsRowView: View {
 
                 CounterWheelView(
                     title: "MO",
-                    width: wheelWidth,
+                    width: numericWidth,
                     height: wheelHeight,
                     tint: .mint,
                     labelProvider: MonthLabelProvider(calendar: calendar),
@@ -123,7 +130,7 @@ private struct CounterWheelsRowView: View {
 
                 CounterWheelView(
                     title: "DY",
-                    width: wheelWidth,
+                    width: numericWidth,
                     height: wheelHeight,
                     tint: .cyan,
                     labelProvider: DayLabelProvider(calendar: calendar),
@@ -131,8 +138,17 @@ private struct CounterWheelsRowView: View {
                 )
 
                 CounterWheelView(
+                    title: "WD",
+                    width: weekdayWidth,
+                    height: wheelHeight,
+                    tint: .green,
+                    labelProvider: WeekdayLabelProvider(calendar: calendar),
+                    date: centerDate
+                )
+
+                CounterWheelView(
                     title: "HR",
-                    width: wheelWidth,
+                    width: numericWidth,
                     height: wheelHeight,
                     tint: .yellow,
                     labelProvider: HourLabelProvider(calendar: calendar),
@@ -141,7 +157,7 @@ private struct CounterWheelsRowView: View {
 
                 CounterWheelView(
                     title: "MN",
-                    width: wheelWidth,
+                    width: numericWidth,
                     height: wheelHeight,
                     tint: .white,
                     labelProvider: MinuteLabelProvider(calendar: calendar),
@@ -150,13 +166,14 @@ private struct CounterWheelsRowView: View {
 
                 CounterWheelView(
                     title: "SC",
-                    width: wheelWidth,
+                    width: numericWidth,
                     height: wheelHeight,
                     tint: .red,
                     labelProvider: SecondLabelProvider(calendar: calendar),
                     date: centerDate
                 )
             }
+            .padding(.horizontal, horizontalInset)
             .frame(width: width, height: height)
         }
     }
@@ -175,6 +192,7 @@ private struct CounterWheelView<Provider: WheelLabelProvider>: View {
         let centerY = height / 2
         let visibleRows = Int((height / rowHeight).rounded(.up)) + 6
         let phase = labelProvider.phase(for: date)
+        let focusBandHalfHeight = rowHeight * 0.55
 
         ZStack {
             RoundedRectangle(cornerRadius: width * 0.22, style: .continuous)
@@ -207,6 +225,9 @@ private struct CounterWheelView<Provider: WheelLabelProvider>: View {
                 let content = labelProvider.row(for: date, relativeOffset: offset)
                 let distance = min(abs((y - centerY) / (height * 0.5)), 1)
                 let majorOpacity = content.isMajor ? 1.0 : 0.52
+                let withinFocusBand = abs(y - centerY) <= focusBandHalfHeight
+                let baseScale = 1 - (distance * 0.22)
+                let magnifiedScale = withinFocusBand ? baseScale * 1.24 : baseScale
 
                 CounterWheelRowView(
                     value: content.label,
@@ -214,7 +235,7 @@ private struct CounterWheelView<Provider: WheelLabelProvider>: View {
                     tint: tint
                 )
                 .frame(width: width * 0.86, height: rowHeight)
-                .scaleEffect(1 - (distance * 0.22))
+                .scaleEffect(magnifiedScale)
                 .opacity((1 - (distance * 0.84)) * majorOpacity)
                 .rotation3DEffect(
                     .degrees(Double((y - centerY) / (height * 0.5)) * -54),
@@ -226,7 +247,7 @@ private struct CounterWheelView<Provider: WheelLabelProvider>: View {
 
             VStack {
                 Text(title)
-                    .font(.caption2.monospaced())
+                    .font(.caption2.monospaced().weight(.medium))
                     .foregroundStyle(tint.opacity(0.85))
                 Spacer()
             }
@@ -255,21 +276,31 @@ private struct CounterWheelRowView: View {
     let tickStrength: CGFloat
     let tint: Color
 
-    var body: some View {
-        HStack {
-            Rectangle()
-                .fill(tint.opacity(0.9))
-                .frame(width: 8, height: max(1.2, 10 * tickStrength))
-                .shadow(color: tint.opacity(0.55), radius: 2)
+    private let tickLaneWidth: CGFloat = 16
 
+    var body: some View {
+        ZStack {
             Text(value)
-                .font(.system(.title3, design: .monospaced))
+                .font(.caption.monospaced())
                 .bold()
                 .foregroundStyle(.white)
                 .lineLimit(1)
-                .minimumScaleFactor(0.7)
+                .minimumScaleFactor(1)
+                .allowsTightening(true)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.leading, tickLaneWidth)
+                .padding(.trailing, 3)
 
-            Spacer(minLength: 0)
+            HStack(spacing: 0) {
+                Rectangle()
+                    .fill(tint.opacity(0.9))
+                    .frame(width: 7, height: max(1.2, 10 * tickStrength))
+                    .shadow(color: tint.opacity(0.55), radius: 2)
+                    .frame(width: tickLaneWidth, alignment: .leading)
+                    .padding(.leading, 1)
+
+                Spacer(minLength: 0)
+            }
         }
     }
 }
@@ -302,9 +333,15 @@ private struct GlassLineMagnifierView: View {
                         lineWidth: 1
                     )
 
-                Rectangle()
-                    .fill(Color.white.opacity(0.42))
-                    .frame(height: 1)
+                VStack(spacing: height * 0.8) {
+                    Rectangle()
+                        .fill(Color.white.opacity(0.42))
+                        .frame(height: 1)
+                    Rectangle()
+                        .fill(Color.white.opacity(0.42))
+                        .frame(height: 1)
+                }
+                .padding(.horizontal, 6)
             }
             .frame(width: size.width - 26, height: height)
             .position(x: size.width / 2, y: size.height / 2)
@@ -337,7 +374,8 @@ private struct YearLabelProvider: WheelLabelProvider {
 
     func row(for date: Date, relativeOffset: Int) -> WheelRowContent {
         let adjusted = calendar.date(byAdding: .year, value: relativeOffset, to: date) ?? date
-        return WheelRowContent(label: adjusted.formatted(.dateTime.year()), isMajor: true)
+        let year = calendar.component(.year, from: adjusted)
+        return WheelRowContent(label: String(year), isMajor: true)
     }
 }
 
@@ -350,7 +388,7 @@ private struct MonthLabelProvider: WheelLabelProvider {
 
     func row(for date: Date, relativeOffset: Int) -> WheelRowContent {
         let adjusted = calendar.date(byAdding: .month, value: relativeOffset, to: date) ?? date
-        return WheelRowContent(label: adjusted.formatted(.dateTime.month(.abbreviated)), isMajor: true)
+        return WheelRowContent(label: adjusted.formatted(.dateTime.month(.twoDigits)), isMajor: true)
     }
 }
 
@@ -363,9 +401,20 @@ private struct DayLabelProvider: WheelLabelProvider {
 
     func row(for date: Date, relativeOffset: Int) -> WheelRowContent {
         let adjusted = calendar.date(byAdding: .day, value: relativeOffset, to: date) ?? date
-        let day = adjusted.formatted(.dateTime.day())
-        let weekday = adjusted.formatted(.dateTime.weekday(.narrow))
-        return WheelRowContent(label: "\(day) \(weekday)", isMajor: true)
+        return WheelRowContent(label: adjusted.formatted(.dateTime.day(.twoDigits)), isMajor: true)
+    }
+}
+
+private struct WeekdayLabelProvider: WheelLabelProvider {
+    let calendar: Calendar
+
+    func phase(for date: Date) -> WheelPhase {
+        WheelPhase(fractional: 0)
+    }
+
+    func row(for date: Date, relativeOffset: Int) -> WheelRowContent {
+        let adjusted = calendar.date(byAdding: .day, value: relativeOffset, to: date) ?? date
+        return WheelRowContent(label: adjusted.formatted(.dateTime.weekday(.short)), isMajor: true)
     }
 }
 
@@ -393,7 +442,7 @@ private struct MinuteLabelProvider: WheelLabelProvider {
         let adjusted = calendar.date(byAdding: .minute, value: relativeOffset, to: date) ?? date
         let second = calendar.component(.second, from: adjusted)
         return WheelRowContent(
-            label: adjusted.formatted(.dateTime.minute()),
+            label: adjusted.formatted(.dateTime.minute(.twoDigits)),
             isMajor: second == 0
         )
     }
@@ -410,7 +459,7 @@ private struct SecondLabelProvider: WheelLabelProvider {
         let adjusted = calendar.date(byAdding: .second, value: relativeOffset, to: date) ?? date
         let second = calendar.component(.second, from: adjusted)
         return WheelRowContent(
-            label: adjusted.formatted(.dateTime.second()),
+            label: adjusted.formatted(.dateTime.second(.twoDigits)),
             isMajor: second.isMultiple(of: 10)
         )
     }
