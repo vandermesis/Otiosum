@@ -281,35 +281,34 @@ private struct GlassLineMagnifierView: View {
         GeometryReader { proxy in
             let size = proxy.size
             let height = max(size.height * 0.09, 72)
+            let lensShape = RoundedRectangle(cornerRadius: height * 0.28, style: .continuous)
 
-            RoundedRectangle(cornerRadius: height * 0.28, style: .continuous)
-                .fill(.ultraThinMaterial.opacity(0.36))
-                .overlay {
-                    RoundedRectangle(cornerRadius: height * 0.28, style: .continuous)
-                        .strokeBorder(
-                            LinearGradient(
-                                colors: [Color.white.opacity(0.7), Color.white.opacity(0.08)],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            ),
-                            lineWidth: 1
-                        )
-                }
-                .overlay {
-                    Rectangle()
-                        .fill(Color.white.opacity(0.38))
-                        .frame(height: 1)
-                }
-                .overlay {
-                    Text(date, format: .dateTime.year().month(.twoDigits).day().hour(.twoDigits(amPM: .omitted)).minute(.twoDigits).second(.twoDigits))
-                        .font(.headline.monospacedDigit())
-                        .bold()
-                        .foregroundStyle(.white)
-                        .shadow(color: .black.opacity(0.45), radius: 1, y: 1)
-                }
-                .frame(width: size.width - 26, height: height)
-                .position(x: size.width / 2, y: size.height / 2)
-                .shadow(color: .black.opacity(0.28), radius: 18, y: 10)
+            ZStack {
+                CounterWheelsRowView(centerDate: date)
+                    .scaleEffect(x: 1.02, y: 1.18, anchor: .center)
+                    .frame(width: size.width, height: size.height)
+                    .clipShape(lensShape)
+
+                lensShape
+                    .fill(.ultraThinMaterial.opacity(0.22))
+
+                lensShape
+                    .strokeBorder(
+                        LinearGradient(
+                            colors: [Color.white.opacity(0.7), Color.white.opacity(0.08)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        ),
+                        lineWidth: 1
+                    )
+
+                Rectangle()
+                    .fill(Color.white.opacity(0.42))
+                    .frame(height: 1)
+            }
+            .frame(width: size.width - 26, height: height)
+            .position(x: size.width / 2, y: size.height / 2)
+            .shadow(color: .black.opacity(0.28), radius: 18, y: 10)
         }
         .allowsHitTesting(false)
     }
@@ -333,18 +332,7 @@ private struct YearLabelProvider: WheelLabelProvider {
     let calendar: Calendar
 
     func phase(for date: Date) -> WheelPhase {
-        let dayOfYear = calendar.ordinality(of: .day, in: .year, for: date) ?? 1
-        let dayCount = calendar.range(of: .day, in: .year, for: date)?.count ?? 365
-        let hour = calendar.component(.hour, from: date)
-        let minute = calendar.component(.minute, from: date)
-        let second = calendar.component(.second, from: date)
-        let nanosecond = calendar.component(.nanosecond, from: date)
-
-        let secondProgress = Double(second) + (Double(nanosecond) / 1_000_000_000)
-        let dayProgress = (Double(hour) + (Double(minute) / 60) + (secondProgress / 3600)) / 24
-        let fraction = (Double(dayOfYear - 1) + dayProgress) / Double(max(dayCount, 1))
-
-        return WheelPhase(fractional: CGFloat(fraction))
+        WheelPhase(fractional: 0)
     }
 
     func row(for date: Date, relativeOffset: Int) -> WheelRowContent {
@@ -357,18 +345,7 @@ private struct MonthLabelProvider: WheelLabelProvider {
     let calendar: Calendar
 
     func phase(for date: Date) -> WheelPhase {
-        let day = calendar.component(.day, from: date)
-        let hour = calendar.component(.hour, from: date)
-        let minute = calendar.component(.minute, from: date)
-        let second = calendar.component(.second, from: date)
-        let nanosecond = calendar.component(.nanosecond, from: date)
-        let dayCount = calendar.range(of: .day, in: .month, for: date)?.count ?? 30
-
-        let secondProgress = Double(second) + (Double(nanosecond) / 1_000_000_000)
-        let dayProgress = (Double(hour) + (Double(minute) / 60) + (secondProgress / 3600)) / 24
-        let fraction = (Double(day - 1) + dayProgress) / Double(max(dayCount, 1))
-
-        return WheelPhase(fractional: CGFloat(fraction))
+        WheelPhase(fractional: 0)
     }
 
     func row(for date: Date, relativeOffset: Int) -> WheelRowContent {
@@ -381,15 +358,7 @@ private struct DayLabelProvider: WheelLabelProvider {
     let calendar: Calendar
 
     func phase(for date: Date) -> WheelPhase {
-        let hour = calendar.component(.hour, from: date)
-        let minute = calendar.component(.minute, from: date)
-        let second = calendar.component(.second, from: date)
-        let nanosecond = calendar.component(.nanosecond, from: date)
-
-        let secondProgress = Double(second) + (Double(nanosecond) / 1_000_000_000)
-        let fraction = (Double(hour) + (Double(minute) / 60) + (secondProgress / 3600)) / 24
-
-        return WheelPhase(fractional: CGFloat(fraction))
+        WheelPhase(fractional: 0)
     }
 
     func row(for date: Date, relativeOffset: Int) -> WheelRowContent {
@@ -404,14 +373,7 @@ private struct HourLabelProvider: WheelLabelProvider {
     let calendar: Calendar
 
     func phase(for date: Date) -> WheelPhase {
-        let minute = calendar.component(.minute, from: date)
-        let second = calendar.component(.second, from: date)
-        let nanosecond = calendar.component(.nanosecond, from: date)
-
-        let secondProgress = Double(second) + (Double(nanosecond) / 1_000_000_000)
-        let fraction = (Double(minute) + (secondProgress / 60)) / 60
-
-        return WheelPhase(fractional: CGFloat(fraction))
+        WheelPhase(fractional: 0)
     }
 
     func row(for date: Date, relativeOffset: Int) -> WheelRowContent {
@@ -424,10 +386,7 @@ private struct MinuteLabelProvider: WheelLabelProvider {
     let calendar: Calendar
 
     func phase(for date: Date) -> WheelPhase {
-        let second = calendar.component(.second, from: date)
-        let nanosecond = calendar.component(.nanosecond, from: date)
-        let fraction = (Double(second) + (Double(nanosecond) / 1_000_000_000)) / 60
-        return WheelPhase(fractional: CGFloat(fraction))
+        WheelPhase(fractional: 0)
     }
 
     func row(for date: Date, relativeOffset: Int) -> WheelRowContent {
@@ -444,8 +403,7 @@ private struct SecondLabelProvider: WheelLabelProvider {
     let calendar: Calendar
 
     func phase(for date: Date) -> WheelPhase {
-        let nanosecond = calendar.component(.nanosecond, from: date)
-        return WheelPhase(fractional: CGFloat(Double(nanosecond) / 1_000_000_000))
+        WheelPhase(fractional: 0)
     }
 
     func row(for date: Date, relativeOffset: Int) -> WheelRowContent {
