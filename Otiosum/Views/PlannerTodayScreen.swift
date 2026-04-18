@@ -13,6 +13,7 @@ struct TodayScreen: View {
     let onMoveLater: (PlannedBlock) -> Void
     let onReturnToJar: (PlannedBlock) -> Void
     let onCalendarFlexibility: (PlannedBlock, PlannerFlexibility) -> Void
+    let onRescheduleBlock: (PlannedBlock, Date) -> Void
 
     var body: some View {
         NavigationStack {
@@ -58,6 +59,12 @@ struct TodayScreen: View {
                         }
                     }
 
+                    TodayTimelineSection(
+                        day: day,
+                        blocks: plan.allBlocks,
+                        onRescheduleBlock: onRescheduleBlock
+                    )
+
                     DropLaneSection()
 
                     ScheduleSection(
@@ -78,5 +85,36 @@ struct TodayScreen: View {
             .background(PlannerBackground(simple: budget.useSimplifiedMode))
             .navigationBarTitleDisplayMode(.inline)
         }
+    }
+}
+
+private struct TodayTimelineSection: View {
+    let day: Date
+    let blocks: [PlannedBlock]
+    let onRescheduleBlock: (PlannedBlock, Date) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Timeline")
+                .font(.title3.bold())
+            Text("Now stays centered so one glance shows what came before and what is next.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
+            TimeWheelView(
+                day: day,
+                blocks: blocks,
+                showsHeader: false,
+                onRescheduleBlock: onRescheduleBlock
+            )
+                .frame(height: 540)
+                .clipShape(.rect(cornerRadius: 24))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.5), lineWidth: 1)
+                )
+        }
+        .padding(16)
+        .background(Color.white.opacity(0.65), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
     }
 }

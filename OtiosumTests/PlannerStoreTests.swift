@@ -113,6 +113,34 @@ struct PlannerStoreTests {
         #expect(store.pendingOverflow == nil)
     }
 
+    @Test("Rescheduling item updates day, start, and clears jar state")
+    func rescheduleItemUpdatesTimingFields() throws {
+        let modelContext = try makeModelContext()
+        let store = PlannerStore()
+
+        let start = Date(timeIntervalSinceReferenceDate: 100_000)
+        let item = PlannableItem(
+            title: "Move me",
+            suggestedIcon: "calendar",
+            tintToken: "sky",
+            scheduledDay: nil,
+            preferredStartMinutes: nil,
+            isInJar: true,
+            forceAfterBedtime: true
+        )
+
+        modelContext.insert(item)
+        try modelContext.save()
+
+        store.rescheduleItem(item, to: start, modelContext: modelContext)
+
+        let calendar = Calendar.current
+        #expect(item.scheduledDay == calendar.startOfDay(for: start))
+        #expect(item.preferredStartMinutes == start.minutesSinceStartOfDay(using: calendar))
+        #expect(item.isInJar == false)
+        #expect(item.forceAfterBedtime == false)
+    }
+
     @Test("Refresh prompts picks the first overflow and first shift proposal")
     func refreshPromptsSelectsFirstEntries() throws {
         let store = PlannerStore()

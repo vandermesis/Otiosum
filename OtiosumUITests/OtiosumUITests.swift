@@ -45,7 +45,7 @@ final class OtiosumUITests: XCTestCase {
         lane.tap()
 
         app.tabBars.buttons["Today"].tap()
-        XCTAssertTrue(app.staticTexts["Idea garden"].waitForExistence(timeout: 2))
+        XCTAssertTrue(app.textFields["One word is enough"].waitForExistence(timeout: 2))
     }
 
     @MainActor

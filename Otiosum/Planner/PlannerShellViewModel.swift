@@ -175,6 +175,18 @@ final class PlannerShellViewModel {
         store.returnToJar(item, modelContext: modelContext)
     }
 
+    func rescheduleBlock(
+        _ block: PlannedBlock,
+        to start: Date,
+        itemLookup: [UUID: PlannableItem],
+        modelContext: ModelContext
+    ) {
+        registerInteraction()
+        guard block.source == .local, block.isProtected == false else { return }
+        guard let item = itemLookup[block.itemID] else { return }
+        store.rescheduleItem(item, to: start, modelContext: modelContext)
+    }
+
     func updateCalendarFlexibility(
         for block: PlannedBlock,
         flexibility: PlannerFlexibility,

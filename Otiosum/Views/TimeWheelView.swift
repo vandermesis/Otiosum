@@ -3,457 +3,653 @@ import SwiftUI
 struct TimeWheelView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    @GestureState private var dragTranslation: CGFloat = .zero
-    @State private var settledOffsetSeconds: Double = .zero
+    let day: Date
+    let blocks: [PlannedBlock]
+    let showsHeader: Bool
+    let onRescheduleBlock: ((PlannedBlock, Date) -> Void)?
 
-    private let pointsPerSecond: CGFloat = 14
+    @State private var scrollAnchorDate: Date?
+    @State private var dragState: TimelineDragState?
+    @State private var snapFeedbackToken = 0
+    @State private var invalidDropFeedbackToken = 0
+    @State private var invalidDropMessage: String?
+
+    private let calendar = Calendar.current
+    private let slotMinutes = 5
+    private let pointsPerMinute: CGFloat = 2.2
+    private let visibleHourRange: Double = 12
+
+    init(
+        day: Date = .now,
+        blocks: [PlannedBlock] = [],
+        showsHeader: Bool = true,
+        onRescheduleBlock: ((PlannedBlock, Date) -> Void)? = nil
+    ) {
+        self.day = day
+        self.blocks = blocks
+        self.showsHeader = showsHeader
+        self.onRescheduleBlock = onRescheduleBlock
+    }
 
     var body: some View {
-        Group {
-            if reduceMotion {
-                TimelineView(.periodic(from: .now, by: 1)) { context in
-                    wheelContent(for: context.date)
+        TimelineView(.periodic(from: .now, by: 30)) { context in
+            let now = context.date
+            let range = timelineRange(for: day)
+
+            GeometryReader { proxy in
+                let laneWidth = max(proxy.size.width - 124, 180)
+
+                ZStack(alignment: .bottomTrailing) {
+                    ScrollView(.vertical) {
+                        TimelineCanvasView(
+                            range: range,
+                            now: now,
+                            blocks: visibleBlocks(in: range),
+                            slotMinutes: slotMinutes,
+                            pointsPerMinute: pointsPerMinute,
+                            laneWidth: laneWidth,
+                            showsHeader: showsHeader,
+                            calendar: calendar,
+                            dragState: dragState,
+                            onDragChanged: { block, proposedStart in
+                                handleDragChanged(for: block, proposedStart: proposedStart, in: range)
+                            },
+                            onDragEnded: { block in
+                                handleDragEnded(for: block)
+                            }
+                        )
+                    }
+                    .scrollIndicators(.hidden)
+                    .defaultScrollAnchor(.center)
+                    .scrollPosition(id: $scrollAnchorDate, anchor: .center)
+                    .background(PlannerBackground(simple: false))
+
+                    if let invalidDropMessage {
+                        TimelineDropMessageView(message: invalidDropMessage)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                            .padding(.top, 10)
+                            .padding(.horizontal, 12)
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                    }
+
+                    if shouldShowBackToNow(for: now) {
+                        Button("Back to Now", systemImage: "scope") {
+                            jumpToNow(using: now)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .padding(16)
+                        .accessibilityHint("Centers the timeline around the current time")
+                    }
                 }
-            } else {
-                TimelineView(.animation(minimumInterval: 1 / 30, paused: false)) { context in
-                    wheelContent(for: context.date)
+                .onAppear {
+                    jumpToNow(using: now)
+                }
+                .onChange(of: day) { _, _ in
+                    dragState = nil
+                    jumpToNow(using: now)
                 }
             }
         }
+        .sensoryFeedback(.selection, trigger: snapFeedbackToken)
+        .sensoryFeedback(.error, trigger: invalidDropFeedbackToken)
+    }
+
+    private func timelineRange(for date: Date) -> ClosedRange<Date> {
+        let dayStart = calendar.startOfDay(for: date)
+        let start = dayStart.addingTimeInterval(-visibleHourRange * 60 * 60)
+        let end = dayStart.addingTimeInterval((24 + visibleHourRange) * 60 * 60)
+        return start...end
+    }
+
+    private func visibleBlocks(in range: ClosedRange<Date>) -> [PlannedBlock] {
+        blocks.filter { block in
+            block.end > range.lowerBound && block.start < range.upperBound
+        }
+    }
+
+    private func shouldShowBackToNow(for now: Date) -> Bool {
+        guard let anchor = scrollAnchorDate else { return false }
+        return abs(anchor.timeIntervalSince(roundedDate(now, stepMinutes: slotMinutes))) > (20 * 60)
+    }
+
+    private func jumpToNow(using now: Date) {
+        let target = roundedDate(now, stepMinutes: slotMinutes)
+
+        if reduceMotion {
+            scrollAnchorDate = target
+        } else {
+            withAnimation(.easeInOut(duration: 0.25)) {
+                scrollAnchorDate = target
+            }
+        }
+    }
+
+    private func handleDragChanged(
+        for block: PlannedBlock,
+        proposedStart: Date,
+        in range: ClosedRange<Date>
+    ) {
+        guard isDraggable(block) else { return }
+
+        let latestStart = range.upperBound.addingTimeInterval(-block.end.timeIntervalSince(block.start))
+        let bounded = min(max(proposedStart, range.lowerBound), latestStart)
+        let snapped = roundedDate(bounded, stepMinutes: slotMinutes)
+
+        let conflict = fixedConflict(for: block, proposedStart: snapped)
+
+        if dragState?.blockID != block.id {
+            dragState = TimelineDragState(
+                blockID: block.id,
+                originalStart: block.start,
+                proposedStart: snapped,
+                conflictingBlockTitle: conflict?.title
+            )
+            snapFeedbackToken += 1
+            return
+        }
+
+        if dragState?.proposedStart != snapped {
+            dragState?.proposedStart = snapped
+            snapFeedbackToken += 1
+        }
+
+        dragState?.conflictingBlockTitle = conflict?.title
+    }
+
+    private func handleDragEnded(for block: PlannedBlock) {
+        guard let dragState, dragState.blockID == block.id else { return }
+
+        if let conflictingBlockTitle = dragState.conflictingBlockTitle {
+            invalidDropFeedbackToken += 1
+            let message = "Can’t place over \(conflictingBlockTitle)."
+            showInvalidDropMessage(message)
+            self.dragState = nil
+            return
+        }
+
+        invalidDropMessage = nil
+
+        if dragState.proposedStart != dragState.originalStart {
+            onRescheduleBlock?(block, dragState.proposedStart)
+        }
+
+        self.dragState = nil
+    }
+
+    private func isDraggable(_ block: PlannedBlock) -> Bool {
+        block.source == .local && block.isProtected == false && block.isCompleted == false
+    }
+
+    private func fixedConflict(for movingBlock: PlannedBlock, proposedStart: Date) -> PlannedBlock? {
+        let proposedEnd = proposedStart.addingTimeInterval(movingBlock.end.timeIntervalSince(movingBlock.start))
+
+        return blocks.first { block in
+            guard block.id != movingBlock.id else { return false }
+            let fixed = block.isProtected || block.source == .calendar || block.flexibility == .locked
+            guard fixed else { return false }
+            return proposedStart < block.end && proposedEnd > block.start
+        }
+    }
+
+    private func showInvalidDropMessage(_ message: String) {
+        if reduceMotion {
+            invalidDropMessage = message
+        } else {
+            withAnimation(.easeOut(duration: 0.2)) {
+                invalidDropMessage = message
+            }
+        }
+
+        Task {
+            try? await Task.sleep(for: .seconds(2.2))
+            guard invalidDropMessage == message else { return }
+
+            if reduceMotion {
+                invalidDropMessage = nil
+            } else {
+                withAnimation(.easeOut(duration: 0.25)) {
+                    invalidDropMessage = nil
+                }
+            }
+        }
+    }
+
+    private func roundedDate(_ date: Date, stepMinutes: Int) -> Date {
+        let minute = calendar.component(.minute, from: date)
+        let snappedMinute = ((minute + (stepMinutes / 2)) / stepMinutes) * stepMinutes
+        var normalized = calendar.date(bySetting: .minute, value: snappedMinute % 60, of: date) ?? date
+        normalized = calendar.date(bySetting: .second, value: 0, of: normalized) ?? normalized
+
+        if snappedMinute >= 60 {
+            return calendar.date(byAdding: .hour, value: 1, to: normalized) ?? normalized
+        }
+
+        return normalized
+    }
+}
+
+private struct TimelineCanvasView: View {
+    let range: ClosedRange<Date>
+    let now: Date
+    let blocks: [PlannedBlock]
+    let slotMinutes: Int
+    let pointsPerMinute: CGFloat
+    let laneWidth: CGFloat
+    let showsHeader: Bool
+    let calendar: Calendar
+    let dragState: TimelineDragState?
+    let onDragChanged: (PlannedBlock, Date) -> Void
+    let onDragEnded: (PlannedBlock) -> Void
+
+    private var slots: [Date] {
+        strideDates(from: range.lowerBound, through: range.upperBound, everyMinutes: slotMinutes)
+    }
+
+    private var totalHeight: CGFloat {
+        CGFloat(slots.count) * slotHeight
+    }
+
+    private var slotHeight: CGFloat {
+        CGFloat(slotMinutes) * pointsPerMinute
+    }
+
+    private var nowOffset: CGFloat {
+        yOffset(for: now)
+    }
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            VStack(spacing: 0) {
+                if showsHeader {
+                    TimelineLegendView(now: now)
+                        .padding(.horizontal, 12)
+                        .padding(.bottom, 8)
+                }
+
+                ForEach(slots, id: \.self) { slot in
+                    TimelineTickRow(
+                        date: slot,
+                        isMajor: calendar.component(.minute, from: slot) == 0,
+                        isQuarterHour: calendar.component(.minute, from: slot).isMultiple(of: 15),
+                        slotHeight: slotHeight
+                    )
+                    .id(slot)
+                }
+            }
+            .scrollTargetLayout()
+
+            VStack(spacing: 0) {
+                Spacer()
+                    .frame(height: showsHeader ? 52 : 0)
+
+                ZStack(alignment: .topLeading) {
+                    ForEach(blocks) { block in
+                        blockLayer(for: block)
+                    }
+
+                    TimelineNowMarker()
+                        .offset(x: 84, y: nowOffset)
+
+                    if let dragState, let block = blocks.first(where: { $0.id == dragState.blockID }) {
+                        TimelineDragTimeLabel(
+                            date: dragState.proposedStart,
+                            conflictTitle: dragState.conflictingBlockTitle
+                        )
+                        .offset(x: 96, y: yOffset(for: dragState.proposedStart) - 26)
+
+                        TimelineDragGhostCapsule(
+                            width: laneWidth,
+                            isInvalid: dragState.conflictingBlockTitle != nil
+                        )
+                        .offset(x: 96, y: yOffset(for: dragState.proposedStart))
+                        .frame(height: max(height(for: block), 44), alignment: .top)
+                    }
+                }
+            }
+            .frame(height: totalHeight + (showsHeader ? 52 : 0), alignment: .top)
+        }
+        .frame(maxWidth: .infinity, minHeight: totalHeight + (showsHeader ? 52 : 0), alignment: .top)
     }
 
     @ViewBuilder
-    private func wheelContent(for timelineDate: Date) -> some View {
-        GeometryReader { _ in
-            let totalOffset = settledOffsetSeconds - (dragTranslation / pointsPerSecond)
-            let centerDate = timelineDate.addingTimeInterval(totalOffset)
+    private func blockLayer(for block: PlannedBlock) -> some View {
+        let isDraggingBlock = dragState?.blockID == block.id
 
-            ZStack {
-                MeterPanelBackgroundView()
-                CounterWheelsRowView(centerDate: centerDate)
-                GlassLineMagnifierView(date: centerDate)
-
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("Time")
-                        .font(.headline.weight(.semibold))
-                    Text("A calm orientation view for browsing the flow of time without editing the schedule.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+        if isDraggingBlock {
+            TimelineTaskCapsule(
+                block: block,
+                now: now,
+                width: laneWidth,
+                pointsPerMinute: pointsPerMinute,
+                draggable: true,
+                onDragChanged: { proposed in
+                    onDragChanged(block, proposed)
+                },
+                onDragEnded: {
+                    onDragEnded(block)
                 }
-                .padding(18)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            }
-            .contentShape(.rect)
-            .gesture(dragGesture)
-            .ignoresSafeArea()
+            )
+            .opacity(0.35)
+            .offset(x: 96, y: yOffset(for: block.start))
+            .frame(height: max(height(for: block), 44), alignment: .top)
+        } else {
+            TimelineTaskCapsule(
+                block: block,
+                now: now,
+                width: laneWidth,
+                pointsPerMinute: pointsPerMinute,
+                draggable: block.source == .local && block.isProtected == false && block.isCompleted == false,
+                onDragChanged: { proposed in
+                    onDragChanged(block, proposed)
+                },
+                onDragEnded: {
+                    onDragEnded(block)
+                }
+            )
+            .offset(x: 96, y: yOffset(for: block.start))
+            .frame(height: max(height(for: block), 44), alignment: .top)
         }
+    }
+
+    private func height(for block: PlannedBlock) -> CGFloat {
+        CGFloat(max(block.durationMinutes, slotMinutes)) * pointsPerMinute
+    }
+
+    private func yOffset(for date: Date) -> CGFloat {
+        let clampedDate = min(max(date, range.lowerBound), range.upperBound)
+        let minutes = clampedDate.timeIntervalSince(range.lowerBound) / 60
+        return CGFloat(minutes) * pointsPerMinute
+    }
+
+    private func strideDates(from start: Date, through end: Date, everyMinutes step: Int) -> [Date] {
+        var dates: [Date] = []
+        var current = start
+
+        while current <= end {
+            dates.append(current)
+            current = current.addingTimeInterval(TimeInterval(step * 60))
+        }
+
+        return dates
+    }
+}
+
+private struct TimelineLegendView: View {
+    let now: Date
+
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Timeline")
+                    .font(.headline)
+                Text(now.formatted(.dateTime.weekday(.wide).day().month().hour().minute()))
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            Text("Now centered")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
+private struct TimelineTickRow: View {
+    let date: Date
+    let isMajor: Bool
+    let isQuarterHour: Bool
+    let slotHeight: CGFloat
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Text(label)
+                .font(isMajor ? .caption.bold() : .caption2)
+                .foregroundStyle(isMajor ? .primary : .secondary)
+                .frame(width: 72, alignment: .trailing)
+
+            Rectangle()
+                .fill(lineColor)
+                .frame(height: isMajor ? 1 : 0.5)
+
+            Spacer(minLength: 0)
+        }
+        .frame(height: slotHeight)
+        .accessibilityHidden(true)
+    }
+
+    private var lineColor: Color {
+        if isMajor {
+            return .primary.opacity(0.25)
+        }
+
+        if isQuarterHour {
+            return .primary.opacity(0.13)
+        }
+
+        return .primary.opacity(0.08)
+    }
+
+    private var label: String {
+        if isMajor {
+            return date.formatted(.dateTime.hour(.defaultDigits(amPM: .abbreviated)))
+        }
+
+        if isQuarterHour {
+            return date.formatted(.dateTime.minute(.twoDigits))
+        }
+
+        return ""
+    }
+}
+
+private struct TimelineTaskCapsule: View {
+    let block: PlannedBlock
+    let now: Date
+    let width: CGFloat
+    let pointsPerMinute: CGFloat
+    let draggable: Bool
+    let onDragChanged: (Date) -> Void
+    let onDragEnded: () -> Void
+
+    var body: some View {
+        HStack(spacing: 8) {
+            PlannerIcon(symbolName: block.symbolName, tintToken: block.tintToken, compact: true)
+
+            Text(shortTitle)
+                .font(.subheadline)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            Image(systemName: statusSymbol)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 10)
+        .frame(width: width, height: 44, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color.white.opacity(0.88))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(borderColor, lineWidth: 1)
+        )
+        .contentShape(.rect)
+        .gesture(dragGesture)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityLabel)
+        .accessibilityValue(accessibilityValue)
+        .accessibilityHint(draggable ? "Drag up or down to move this task" : "Fixed task")
+        .accessibilityIdentifier("timeline-task-\(block.title.testingIdentifier)")
     }
 
     private var dragGesture: some Gesture {
-        DragGesture(minimumDistance: 0)
-            .updating($dragTranslation) { value, state, _ in
-                state = value.translation.height
+        DragGesture(minimumDistance: 2)
+            .onChanged { value in
+                guard draggable else { return }
+                let deltaMinutes = value.translation.height / pointsPerMinute
+                let proposed = block.start.addingTimeInterval(TimeInterval(deltaMinutes * 60))
+                onDragChanged(proposed)
             }
-            .onEnded { value in
-                let dragSeconds = -(value.translation.height / pointsPerSecond)
-                let extraMomentum = -((value.predictedEndTranslation.height - value.translation.height) / pointsPerSecond)
+            .onEnded { _ in
+                guard draggable else { return }
+                onDragEnded()
+            }
+    }
 
-                withAnimation(reduceMotion ? .easeOut(duration: 0.2) : .spring(duration: 0.55, bounce: 0.22)) {
-                    settledOffsetSeconds += Double(dragSeconds + (extraMomentum * 0.2))
-                }
-            }
+    private var shortTitle: String {
+        String(block.title.prefix(18))
+    }
+
+    private var statusSymbol: String {
+        if block.isCompleted {
+            return "checkmark.circle.fill"
+        }
+
+        if now > block.end {
+            return "exclamationmark.circle"
+        }
+
+        if now >= block.start && now <= block.end {
+            return "play.circle.fill"
+        }
+
+        return draggable ? "arrow.up.and.down.circle" : "circle"
+    }
+
+    private var borderColor: Color {
+        if block.isCompleted {
+            return .green.opacity(0.5)
+        }
+
+        if now > block.end {
+            return .red.opacity(0.5)
+        }
+
+        if draggable {
+            return .black.opacity(0.2)
+        }
+
+        return .black.opacity(0.12)
+    }
+
+    private var accessibilityLabel: String {
+        block.title
+    }
+
+    private var accessibilityValue: String {
+        let span = "\(block.start.formatted(.dateTime.hour().minute())) to \(block.end.formatted(.dateTime.hour().minute()))"
+
+        if block.isCompleted {
+            return "\(span), completed"
+        }
+
+        if now > block.end {
+            return "\(span), overdue"
+        }
+
+        if now >= block.start && now <= block.end {
+            return "\(span), active"
+        }
+
+        return "\(span), upcoming"
     }
 }
 
-private struct MeterPanelBackgroundView: View {
+private struct TimelineNowMarker: View {
     var body: some View {
-        ZStack {
-            LinearGradient(
-                colors: [
-                    Color(red: 0.05, green: 0.05, blue: 0.05),
-                    Color(red: 0.10, green: 0.09, blue: 0.08),
-                    Color(red: 0.03, green: 0.03, blue: 0.03)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
+        HStack(spacing: 8) {
+            Circle()
+                .fill(Color.red)
+                .frame(width: 8, height: 8)
 
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .fill(.clear)
-                .padding()
-                .background {
-                    RoundedRectangle(cornerRadius: 28, style: .continuous)
-                        .strokeBorder(
-                            LinearGradient(
-                                colors: [Color.white.opacity(0.22), Color.black.opacity(0.4)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            lineWidth: 1.1
-                        )
-                        .padding()
-                }
-
-            LinearGradient(
-                colors: [
-                    Color.black.opacity(0.22),
-                    .clear,
-                    Color.black.opacity(0.22)
-                ],
-                startPoint: .leading,
-                endPoint: .trailing
-            )
+            Rectangle()
+                .fill(Color.red.opacity(0.6))
+                .frame(height: 1.5)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityLabel("Current time")
     }
 }
 
-private struct CounterWheelsRowView: View {
-    let centerDate: Date
-    private let calendar = Calendar.current
+private struct TimelineDropMessageView: View {
+    let message: String
 
     var body: some View {
-        GeometryReader { proxy in
-            let width = proxy.size.width
-            let height = proxy.size.height
-            let wheelHeight = min(max(height * 0.82, 360), 760)
-            let spacing: CGFloat = 4
-            let horizontalInset: CGFloat = 10
-            let totalSpacing = spacing * 6
-            let availableWidth = max(width - totalSpacing - (horizontalInset * 2), 280)
-            let widthUnit = availableWidth / 7.7
-            let yearWidth = widthUnit * 1.5
-            let weekdayWidth = widthUnit * 1.45
-            let numericWidth = widthUnit
-
-            HStack(spacing: spacing) {
-                CounterWheelView(
-                    title: "YR",
-                    width: yearWidth,
-                    height: wheelHeight,
-                    tint: .orange,
-                    labelProvider: YearLabelProvider(calendar: calendar),
-                    date: centerDate
-                )
-
-                CounterWheelView(
-                    title: "MO",
-                    width: numericWidth,
-                    height: wheelHeight,
-                    tint: .mint,
-                    labelProvider: MonthLabelProvider(calendar: calendar),
-                    date: centerDate
-                )
-
-                CounterWheelView(
-                    title: "DY",
-                    width: numericWidth,
-                    height: wheelHeight,
-                    tint: .cyan,
-                    labelProvider: DayLabelProvider(calendar: calendar),
-                    date: centerDate
-                )
-
-                CounterWheelView(
-                    title: "WD",
-                    width: weekdayWidth,
-                    height: wheelHeight,
-                    tint: .green,
-                    labelProvider: WeekdayLabelProvider(calendar: calendar),
-                    date: centerDate
-                )
-
-                CounterWheelView(
-                    title: "HR",
-                    width: numericWidth,
-                    height: wheelHeight,
-                    tint: .yellow,
-                    labelProvider: HourLabelProvider(calendar: calendar),
-                    date: centerDate
-                )
-
-                CounterWheelView(
-                    title: "MN",
-                    width: numericWidth,
-                    height: wheelHeight,
-                    tint: .white,
-                    labelProvider: MinuteLabelProvider(calendar: calendar),
-                    date: centerDate
-                )
-
-                CounterWheelView(
-                    title: "SC",
-                    width: numericWidth,
-                    height: wheelHeight,
-                    tint: .red,
-                    labelProvider: SecondLabelProvider(calendar: calendar),
-                    date: centerDate
-                )
-            }
-            .padding(.horizontal, horizontalInset)
-            .frame(width: width, height: height)
-        }
-    }
-}
-
-private struct CounterWheelView<Provider: WheelLabelProvider>: View {
-    let title: String
-    let width: CGFloat
-    let height: CGFloat
-    let tint: Color
-    let labelProvider: Provider
-    let date: Date
-
-    var body: some View {
-        let rowHeight = max(height / 12.5, 32)
-        let centerY = height / 2
-        let visibleRows = Int((height / rowHeight).rounded(.up)) + 6
-        let phase = labelProvider.phase(for: date)
-        let focusBandHalfHeight = rowHeight * 0.55
-
-        ZStack {
-            RoundedRectangle(cornerRadius: width * 0.22, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            Color.black.opacity(0.74),
-                            Color(red: 0.18, green: 0.17, blue: 0.15),
-                            Color.black.opacity(0.78)
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-                .overlay {
-                    RoundedRectangle(cornerRadius: width * 0.22, style: .continuous)
-                        .strokeBorder(
-                            LinearGradient(
-                                colors: [Color.white.opacity(0.32), Color.black.opacity(0.42)],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            ),
-                            lineWidth: 1
-                        )
-                }
-                .shadow(color: .black.opacity(0.45), radius: 16, y: 9)
-
-            ForEach(-visibleRows...visibleRows, id: \.self) { offset in
-                let y = centerY + ((CGFloat(offset) - phase.fractional) * rowHeight)
-                let content = labelProvider.row(for: date, relativeOffset: offset)
-                let distance = min(abs((y - centerY) / (height * 0.5)), 1)
-                let majorOpacity = content.isMajor ? 1.0 : 0.52
-                let withinFocusBand = abs(y - centerY) <= focusBandHalfHeight
-                let baseScale = 1 - (distance * 0.22)
-                let magnifiedScale = withinFocusBand ? baseScale * 1.24 : baseScale
-
-                CounterWheelRowView(
-                    value: content.label,
-                    tickStrength: content.isMajor ? 1.0 : 0.55,
-                    tint: tint
-                )
-                .frame(width: width * 0.86, height: rowHeight)
-                .scaleEffect(magnifiedScale)
-                .opacity((1 - (distance * 0.84)) * majorOpacity)
-                .rotation3DEffect(
-                    .degrees(Double((y - centerY) / (height * 0.5)) * -54),
-                    axis: (x: 1, y: 0, z: 0),
-                    perspective: 0.86
-                )
-                .position(x: width / 2, y: y)
-            }
-
-            VStack {
-                Text(title)
-                    .font(.caption2.monospaced().weight(.medium))
-                    .foregroundStyle(tint.opacity(0.85))
-                Spacer()
-            }
-            .padding(.top, 8)
-        }
-        .frame(width: width, height: height)
-        .clipShape(.rect(cornerRadius: width * 0.22))
-        .overlay {
-            LinearGradient(
-                stops: [
-                    .init(color: Color.black.opacity(0.7), location: 0.0),
-                    .init(color: .clear, location: 0.18),
-                    .init(color: .clear, location: 0.82),
-                    .init(color: Color.black.opacity(0.7), location: 1.0)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .clipShape(.rect(cornerRadius: width * 0.22))
-        }
-    }
-}
-
-private struct CounterWheelRowView: View {
-    let value: String
-    let tickStrength: CGFloat
-    let tint: Color
-
-    private let tickLaneWidth: CGFloat = 16
-
-    var body: some View {
-        ZStack {
-            Text(value)
-                .font(.caption.monospaced())
-                .bold()
+        HStack(spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
                 .foregroundStyle(.white)
-                .lineLimit(1)
-                .minimumScaleFactor(1)
-                .allowsTightening(true)
-                .frame(maxWidth: .infinity, alignment: .center)
-                .padding(.leading, tickLaneWidth)
-                .padding(.trailing, 3)
-
-            HStack(spacing: 0) {
-                Rectangle()
-                    .fill(tint.opacity(0.9))
-                    .frame(width: 7, height: max(1.2, 10 * tickStrength))
-                    .shadow(color: tint.opacity(0.55), radius: 2)
-                    .frame(width: tickLaneWidth, alignment: .leading)
-                    .padding(.leading, 1)
-
-                Spacer(minLength: 0)
-            }
+            Text(message)
+                .font(.footnote)
+                .lineLimit(2)
+                .foregroundStyle(.white)
+            Spacer(minLength: 0)
         }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            Color.red.opacity(0.85),
+            in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.22), lineWidth: 1)
+        )
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(message)
     }
 }
 
-private struct GlassLineMagnifierView: View {
-    let date: Date
+private struct TimelineDragGhostCapsule: View {
+    let width: CGFloat
+    let isInvalid: Bool
 
     var body: some View {
-        GeometryReader { proxy in
-            let size = proxy.size
-            let height = max(size.height * 0.09, 72)
-            let lensShape = RoundedRectangle(cornerRadius: height * 0.28, style: .continuous)
+        RoundedRectangle(cornerRadius: 14, style: .continuous)
+            .strokeBorder(style: StrokeStyle(lineWidth: 1.2, dash: [5, 4]))
+            .foregroundStyle((isInvalid ? Color.red : .primary).opacity(0.5))
+            .frame(width: width, height: 44)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill((isInvalid ? Color.red : .white).opacity(0.22))
+            )
+            .allowsHitTesting(false)
+    }
+}
 
-            ZStack {
-                CounterWheelsRowView(centerDate: date)
-                    .scaleEffect(x: 1.02, y: 1.18, anchor: .center)
-                    .frame(width: size.width, height: size.height)
-                    .clipShape(lensShape)
-            }
-            .frame(width: size.width - 26, height: height)
-            .position(x: size.width / 2, y: size.height / 2)
-            .shadow(color: .black.opacity(0.28), radius: 18, y: 10)
+private struct TimelineDragTimeLabel: View {
+    let date: Date
+    let conflictTitle: String?
+
+    var body: some View {
+        Text(labelText)
+            .font(.caption.bold())
+            .lineLimit(1)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(Color.white.opacity(0.9), in: Capsule())
+            .overlay(
+                Capsule()
+                    .strokeBorder((conflictTitle == nil ? Color.primary : .red).opacity(0.2), lineWidth: 1)
+            )
+            .accessibilityHidden(true)
+    }
+
+    private var labelText: String {
+        guard let conflictTitle else {
+            return date.formatted(.dateTime.hour().minute())
         }
-        .allowsHitTesting(false)
+
+        return "Conflict: \(conflictTitle)"
     }
 }
 
-private struct WheelPhase {
-    let fractional: CGFloat
-}
-
-private struct WheelRowContent {
-    let label: String
-    let isMajor: Bool
-}
-
-private protocol WheelLabelProvider {
-    func phase(for date: Date) -> WheelPhase
-    func row(for date: Date, relativeOffset: Int) -> WheelRowContent
-}
-
-private struct YearLabelProvider: WheelLabelProvider {
-    let calendar: Calendar
-
-    func phase(for date: Date) -> WheelPhase {
-        WheelPhase(fractional: 0)
-    }
-
-    func row(for date: Date, relativeOffset: Int) -> WheelRowContent {
-        let adjusted = calendar.date(byAdding: .year, value: relativeOffset, to: date) ?? date
-        let year = calendar.component(.year, from: adjusted)
-        return WheelRowContent(label: String(year), isMajor: true)
-    }
-}
-
-private struct MonthLabelProvider: WheelLabelProvider {
-    let calendar: Calendar
-
-    func phase(for date: Date) -> WheelPhase {
-        WheelPhase(fractional: 0)
-    }
-
-    func row(for date: Date, relativeOffset: Int) -> WheelRowContent {
-        let adjusted = calendar.date(byAdding: .month, value: relativeOffset, to: date) ?? date
-        return WheelRowContent(label: adjusted.formatted(.dateTime.month(.twoDigits)), isMajor: true)
-    }
-}
-
-private struct DayLabelProvider: WheelLabelProvider {
-    let calendar: Calendar
-
-    func phase(for date: Date) -> WheelPhase {
-        WheelPhase(fractional: 0)
-    }
-
-    func row(for date: Date, relativeOffset: Int) -> WheelRowContent {
-        let adjusted = calendar.date(byAdding: .day, value: relativeOffset, to: date) ?? date
-        return WheelRowContent(label: adjusted.formatted(.dateTime.day(.twoDigits)), isMajor: true)
-    }
-}
-
-private struct WeekdayLabelProvider: WheelLabelProvider {
-    let calendar: Calendar
-
-    func phase(for date: Date) -> WheelPhase {
-        WheelPhase(fractional: 0)
-    }
-
-    func row(for date: Date, relativeOffset: Int) -> WheelRowContent {
-        let adjusted = calendar.date(byAdding: .day, value: relativeOffset, to: date) ?? date
-        return WheelRowContent(label: adjusted.formatted(.dateTime.weekday(.short)), isMajor: true)
-    }
-}
-
-private struct HourLabelProvider: WheelLabelProvider {
-    let calendar: Calendar
-
-    func phase(for date: Date) -> WheelPhase {
-        WheelPhase(fractional: 0)
-    }
-
-    func row(for date: Date, relativeOffset: Int) -> WheelRowContent {
-        let adjusted = calendar.date(byAdding: .hour, value: relativeOffset, to: date) ?? date
-        return WheelRowContent(label: adjusted.formatted(.dateTime.hour(.twoDigits(amPM: .omitted))), isMajor: true)
-    }
-}
-
-private struct MinuteLabelProvider: WheelLabelProvider {
-    let calendar: Calendar
-
-    func phase(for date: Date) -> WheelPhase {
-        WheelPhase(fractional: 0)
-    }
-
-    func row(for date: Date, relativeOffset: Int) -> WheelRowContent {
-        let adjusted = calendar.date(byAdding: .minute, value: relativeOffset, to: date) ?? date
-        let second = calendar.component(.second, from: adjusted)
-        return WheelRowContent(
-            label: adjusted.formatted(.dateTime.minute(.twoDigits)),
-            isMajor: second == 0
-        )
-    }
-}
-
-private struct SecondLabelProvider: WheelLabelProvider {
-    let calendar: Calendar
-
-    func phase(for date: Date) -> WheelPhase {
-        WheelPhase(fractional: 0)
-    }
-
-    func row(for date: Date, relativeOffset: Int) -> WheelRowContent {
-        let adjusted = calendar.date(byAdding: .second, value: relativeOffset, to: date) ?? date
-        let second = calendar.component(.second, from: adjusted)
-        return WheelRowContent(
-            label: adjusted.formatted(.dateTime.second(.twoDigits)),
-            isMajor: second.isMultiple(of: 10)
-        )
-    }
+private struct TimelineDragState {
+    let blockID: UUID
+    let originalStart: Date
+    var proposedStart: Date
+    var conflictingBlockTitle: String?
 }

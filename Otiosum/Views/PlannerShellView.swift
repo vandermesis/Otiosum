@@ -96,6 +96,14 @@ struct PlannerShellView: View {
                                 flexibility: flexibility,
                                 modelContext: modelContext
                             )
+                        },
+                        onRescheduleBlock: { block, start in
+                            viewModel.rescheduleBlock(
+                                block,
+                                to: start,
+                                itemLookup: itemLookup,
+                                modelContext: modelContext
+                            )
                         }
                     )
                     .tag(PlannerTab.today)

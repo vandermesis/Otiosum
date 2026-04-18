@@ -117,6 +117,20 @@ final class PlannerStore {
         try? modelContext.save()
     }
 
+    func rescheduleItem(
+        _ item: PlannableItem,
+        to start: Date,
+        modelContext: ModelContext
+    ) {
+        let calendar = Calendar.current
+        item.scheduledDay = calendar.startOfDay(for: start)
+        item.preferredStartMinutes = max(0, min(23 * 60 + 55, start.minutesSinceStartOfDay(using: calendar)))
+        item.preferredTimeWindow = inferredWindow(for: start)
+        item.isInJar = false
+        item.forceAfterBedtime = false
+        try? modelContext.save()
+    }
+
     func toggleCompletion(
         _ item: PlannableItem,
         modelContext: ModelContext
