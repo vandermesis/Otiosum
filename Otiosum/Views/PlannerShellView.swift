@@ -38,6 +38,10 @@ struct PlannerShellView: View {
         )
     }
 
+    private var somedayItems: [PlannableItem] {
+        items.filter { $0.isInJar || $0.scheduledDay == nil }
+    }
+
     private var promptKey: String {
         viewModel.promptKey(for: selectedDayPlan)
     }
@@ -57,6 +61,7 @@ struct PlannerShellView: View {
                         plan: selectedDayPlan,
                         budget: budgetSnapshot,
                         calendarService: viewModel.calendarService,
+                        somedayItems: somedayItems,
                         onRequestCalendarAccess: {
                             Task {
                                 await viewModel.requestCalendarAccess()
@@ -69,33 +74,17 @@ struct PlannerShellView: View {
                                 template: templateSnapshot
                             )
                         },
-                        onToggleComplete: { block in
-                            viewModel.toggleCompletion(
-                                for: block,
-                                itemLookup: itemLookup,
+                        onScheduleSomedayItem: { item, lane in
+                            viewModel.scheduleJarItem(
+                                item: item,
+                                lane: lane,
                                 modelContext: modelContext
                             )
                         },
-                        onMoveLater: { block in
-                            viewModel.moveItemLater(
-                                for: block,
-                                itemLookup: itemLookup,
-                                modelContext: modelContext
-                            )
-                        },
-                        onReturnToJar: { block in
-                            viewModel.returnToJar(
-                                for: block,
-                                itemLookup: itemLookup,
-                                modelContext: modelContext
-                            )
-                        },
-                        onCalendarFlexibility: { block, flexibility in
-                            viewModel.updateCalendarFlexibility(
-                                for: block,
-                                flexibility: flexibility,
-                                modelContext: modelContext
-                            )
+                        onDropSomedayItem: { itemID, date in
+                            guard let item = itemLookup[itemID] else { return false }
+                            viewModel.scheduleSomedayItem(item, at: date, modelContext: modelContext)
+                            return true
                         },
                         onRescheduleBlock: { block, start in
                             viewModel.rescheduleBlock(
@@ -108,46 +97,18 @@ struct PlannerShellView: View {
                     )
                     .tag(PlannerTab.today)
                     .tabItem {
-                        Label("Today", systemImage: "sun.max.fill")
+                        Label("Now", systemImage: "sun.max.fill")
                     }
 
-                    JarScreen(
-                        items: items.filter { $0.isInJar || $0.scheduledDay == nil },
-                        quickCapture: jarQuickCaptureBinding,
-                        onCapture: {
-                            viewModel.captureQuickItem(
-                                from: .jar,
-                                modelContext: modelContext,
-                                template: templateSnapshot
-                            )
-                        },
-                        onSchedule: { item, lane in
-                            viewModel.scheduleJarItem(
-                                item: item,
-                                lane: lane,
-                                modelContext: modelContext
-                            )
-                        }
-                    )
-                    .tag(PlannerTab.jar)
-                    .tabItem {
-                        Label("Jar", systemImage: "circle.grid.3x3.fill")
-                    }
-
-                    UpcomingScreen(
+                    FutureScreen(
                         plans: upcomingPlans,
+                        budget: budgetSnapshot,
                         calendarService: viewModel.calendarService
                     )
                     .tag(PlannerTab.upcoming)
                     .tabItem {
-                        Label("Upcoming", systemImage: "calendar")
+                        Label("Future", systemImage: "calendar")
                     }
-
-                    TimeWheelView()
-                        .tag(PlannerTab.time)
-                        .tabItem {
-                            Label("Time", systemImage: "clock.arrow.circlepath")
-                        }
 
                     if let template, let budget {
                         SettingsScreen(
@@ -163,6 +124,7 @@ struct PlannerShellView: View {
                 }
                 .tint(.black)
                 .background(PlannerBackground(simple: budgetSnapshot.useSimplifiedMode))
+                .highPriorityGesture(tabSwipeGesture)
             }
         }
         .task {
@@ -212,13 +174,6 @@ struct PlannerShellView: View {
         )
     }
 
-    private var jarQuickCaptureBinding: Binding<String> {
-        Binding(
-            get: { viewModel.jarQuickCapture },
-            set: { viewModel.jarQuickCapture = $0 }
-        )
-    }
-
     private var selectedTabBinding: Binding<PlannerTab> {
         Binding(
             get: { viewModel.selectedTab },
@@ -227,6 +182,30 @@ struct PlannerShellView: View {
                 viewModel.registerInteraction()
             }
         )
+    }
+
+    private var tabSwipeGesture: some Gesture {
+        DragGesture(minimumDistance: 30)
+            .onEnded { value in
+                guard abs(value.translation.width) > abs(value.translation.height) else { return }
+
+                if value.translation.width < -60 {
+                    moveToAdjacentTab(forward: true)
+                } else if value.translation.width > 60 {
+                    moveToAdjacentTab(forward: false)
+                }
+            }
+    }
+
+    private func moveToAdjacentTab(forward: Bool) {
+        let allTabs: [PlannerTab] = [.today, .upcoming, .settings]
+        guard let currentIndex = allTabs.firstIndex(of: viewModel.selectedTab) else { return }
+
+        let nextIndex = forward ? currentIndex + 1 : currentIndex - 1
+        guard allTabs.indices.contains(nextIndex) else { return }
+
+        viewModel.selectedTab = allTabs[nextIndex]
+        viewModel.registerInteraction()
     }
 
     private var pendingOverflowBinding: Binding<PendingOverflowState?> {

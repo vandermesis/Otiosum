@@ -6,7 +6,7 @@ struct DayHeader: View {
     var body: some View {
         HStack(alignment: .center) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Today")
+                Text("Now")
                     .font(.system(.largeTitle, design: .rounded, weight: .bold))
                 Text(day.formatted(.dateTime.weekday(.wide).day().month()))
                     .foregroundStyle(.secondary)

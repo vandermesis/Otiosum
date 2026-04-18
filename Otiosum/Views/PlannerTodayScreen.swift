@@ -7,114 +7,166 @@ struct TodayScreen: View {
     let plan: DayPlan
     let budget: DailyBudgetSnapshot
     let calendarService: SystemCalendarService
+    let somedayItems: [PlannableItem]
     let onRequestCalendarAccess: () -> Void
     let onCapture: () -> Void
-    let onToggleComplete: (PlannedBlock) -> Void
-    let onMoveLater: (PlannedBlock) -> Void
-    let onReturnToJar: (PlannedBlock) -> Void
-    let onCalendarFlexibility: (PlannedBlock, PlannerFlexibility) -> Void
+    let onScheduleSomedayItem: (PlannableItem, DropLane) -> Void
+    let onDropSomedayItem: (UUID, Date) -> Bool
     let onRescheduleBlock: (PlannedBlock, Date) -> Void
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    DayHeader(day: $day)
+            ZStack(alignment: .bottom) {
+                PlannerBackground(simple: budget.useSimplifiedMode)
 
-                    CaptureComposer(
-                        title: "Quick add",
-                        placeholder: "One word is enough",
-                        text: $quickCapture,
-                        buttonTitle: "Place in today",
-                        onSubmit: onCapture
-                    )
+                VStack(spacing: 12) {
+                    DayHeader(day: $day)
+                        .padding(.horizontal, 18)
+                        .padding(.top, 10)
 
                     if calendarService.canReadEvents == false {
                         PlannerMessageCard(
-                            title: "Bring in your calendar when you want",
-                            message: "Otiosum already works with local tasks. If you connect Calendar, synced events will be protected in the plan too.",
+                            title: "Calendar is optional",
+                            message: "Connect it when you want protected synced events to appear in the timeline.",
                             actionTitle: "Connect Calendar",
                             action: onRequestCalendarAccess
                         )
+                        .padding(.horizontal, 18)
                     }
 
-                    if let nowBlock = plan.nowBlock {
-                        SpotlightCard(title: "Now", block: nowBlock)
-                    } else {
-                        CalmEmptyState(
-                            title: "Nothing urgent right now",
-                            message: "The planner is keeping some open space."
-                        )
-                    }
-
-                    if let nextBlock = plan.nextBlock {
-                        SpotlightCard(title: "Next", block: nextBlock)
-                    }
-
-                    if plan.warnings.isEmpty == false {
-                        VStack(spacing: 10) {
-                            ForEach(plan.warnings) { warning in
-                                WarningCard(warning: warning)
-                            }
-                        }
-                    }
-
-                    TodayTimelineSection(
+                    NowTimelineSection(
                         day: day,
-                        blocks: plan.allBlocks,
+                        plan: plan,
+                        onDropSomedayItem: onDropSomedayItem,
                         onRescheduleBlock: onRescheduleBlock
                     )
-
-                    DropLaneSection()
-
-                    ScheduleSection(
-                        title: "Later",
-                        subtitle: "Flexible blocks that can move without shame.",
-                        blocks: plan.laterBlocks,
-                        onToggleComplete: onToggleComplete,
-                        onMoveLater: onMoveLater,
-                        onReturnToJar: onReturnToJar,
-                        onCalendarFlexibility: onCalendarFlexibility
-                    )
-
-                    ProtectedTimeSection(plan: plan, budget: budget)
+                        .padding(.horizontal, 18)
                 }
-                .padding(.horizontal, 18)
-                .padding(.vertical, 20)
+
+                NowBottomDrawer(
+                    quickCapture: $quickCapture,
+                    somedayItems: somedayItems,
+                    onCapture: onCapture,
+                    onScheduleSomedayItem: onScheduleSomedayItem
+                )
             }
-            .background(PlannerBackground(simple: budget.useSimplifiedMode))
             .navigationBarTitleDisplayMode(.inline)
         }
     }
 }
 
-private struct TodayTimelineSection: View {
+private struct NowTimelineSection: View {
     let day: Date
-    let blocks: [PlannedBlock]
+    let plan: DayPlan
+    let onDropSomedayItem: (UUID, Date) -> Bool
     let onRescheduleBlock: (PlannedBlock, Date) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Timeline")
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Now")
                 .font(.title3.bold())
-            Text("Now stays centered so one glance shows what came before and what is next.")
+            Text("A single view of what is active, what is next, and where open space is available.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
 
             TimeWheelView(
                 day: day,
-                blocks: blocks,
+                blocks: plan.allBlocks,
+                warnings: plan.warnings,
+                currentBlockID: plan.nowBlock?.id,
+                nextBlockID: plan.nextBlock?.id,
                 showsHeader: false,
+                onDropSomedayItem: onDropSomedayItem,
                 onRescheduleBlock: onRescheduleBlock
             )
-                .frame(height: 540)
-                .clipShape(.rect(cornerRadius: 24))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 24, style: .continuous)
-                        .strokeBorder(Color.white.opacity(0.5), lineWidth: 1)
-                )
+            .frame(minHeight: 620)
+            .clipShape(.rect(cornerRadius: 24))
+            .overlay(
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.5), lineWidth: 1)
+            )
         }
-        .padding(16)
-        .background(Color.white.opacity(0.65), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
     }
+}
+
+private struct NowBottomDrawer: View {
+    @Binding var quickCapture: String
+    let somedayItems: [PlannableItem]
+    let onCapture: () -> Void
+    let onScheduleSomedayItem: (PlannableItem, DropLane) -> Void
+
+    @State private var isExpanded = false
+    @State private var mode: DrawerMode = .both
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text("Quick Actions")
+                    .font(.headline)
+                Spacer()
+                Button(isExpanded ? "Collapse" : "Expand", systemImage: isExpanded ? "chevron.down" : "chevron.up") {
+                    withAnimation(.easeInOut(duration: 0.24)) {
+                        isExpanded.toggle()
+                    }
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+            .padding(.horizontal, 12)
+            .padding(.top, 10)
+
+            if isExpanded {
+                Picker("Drawer Mode", selection: $mode) {
+                    Text("Both").tag(DrawerMode.both)
+                    Text("Quick Add").tag(DrawerMode.quickAdd)
+                    Text("Someday").tag(DrawerMode.someday)
+                }
+                .pickerStyle(.segmented)
+                .padding(.horizontal, 12)
+                .padding(.top, 8)
+            }
+
+            VStack(spacing: 12) {
+                if mode != .someday {
+                    HStack(spacing: 10) {
+                        TextField("One word is enough", text: $quickCapture)
+                            .textFieldStyle(.roundedBorder)
+                            .submitLabel(.done)
+                            .onSubmit(onCapture)
+                            .accessibilityIdentifier("now-quick-add-field")
+
+                        Button("Add", systemImage: "plus.circle.fill", action: onCapture)
+                            .buttonStyle(.borderedProminent)
+                            .accessibilityIdentifier("now-quick-add-button")
+                    }
+                }
+
+                if mode != .quickAdd && isExpanded {
+                    SomedayDrawerContent(items: somedayItems, onSchedule: onScheduleSomedayItem)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 12)
+            .frame(maxHeight: isExpanded ? 360 : 120)
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(Color.white.opacity(0.9))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .strokeBorder(Color.black.opacity(0.08), lineWidth: 1)
+        )
+        .padding(.horizontal, 12)
+        .padding(.bottom, 8)
+        .shadow(color: .black.opacity(0.12), radius: 16, y: 6)
+    }
+}
+
+private enum DrawerMode: String, CaseIterable, Identifiable {
+    case both
+    case quickAdd
+    case someday
+
+    var id: String { rawValue }
 }

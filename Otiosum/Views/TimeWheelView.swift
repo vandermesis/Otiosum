@@ -5,7 +5,11 @@ struct TimeWheelView: View {
 
     let day: Date
     let blocks: [PlannedBlock]
+    let warnings: [GuardrailWarning]
+    let currentBlockID: UUID?
+    let nextBlockID: UUID?
     let showsHeader: Bool
+    let onDropSomedayItem: ((UUID, Date) -> Bool)?
     let onRescheduleBlock: ((PlannedBlock, Date) -> Void)?
 
     @State private var scrollAnchorDate: Date?
@@ -22,12 +26,20 @@ struct TimeWheelView: View {
     init(
         day: Date = .now,
         blocks: [PlannedBlock] = [],
+        warnings: [GuardrailWarning] = [],
+        currentBlockID: UUID? = nil,
+        nextBlockID: UUID? = nil,
         showsHeader: Bool = true,
+        onDropSomedayItem: ((UUID, Date) -> Bool)? = nil,
         onRescheduleBlock: ((PlannedBlock, Date) -> Void)? = nil
     ) {
         self.day = day
         self.blocks = blocks
+        self.warnings = warnings
+        self.currentBlockID = currentBlockID
+        self.nextBlockID = nextBlockID
         self.showsHeader = showsHeader
+        self.onDropSomedayItem = onDropSomedayItem
         self.onRescheduleBlock = onRescheduleBlock
     }
 
@@ -48,9 +60,19 @@ struct TimeWheelView: View {
                             slotMinutes: slotMinutes,
                             pointsPerMinute: pointsPerMinute,
                             laneWidth: laneWidth,
+                            warnings: warnings,
+                            currentBlockID: currentBlockID,
+                            nextBlockID: nextBlockID,
                             showsHeader: showsHeader,
                             calendar: calendar,
                             dragState: dragState,
+                            onDropSomedayItem: { itemID, date in
+                                let didHandle = onDropSomedayItem?(itemID, roundedDate(date, stepMinutes: slotMinutes)) ?? false
+                                if didHandle == false {
+                                    showInvalidDropMessage("Couldn’t place this Someday item.")
+                                }
+                                return didHandle
+                            },
                             onDragChanged: { block, proposedStart in
                                 handleDragChanged(for: block, proposedStart: proposedStart, in: range)
                             },
@@ -235,9 +257,13 @@ private struct TimelineCanvasView: View {
     let slotMinutes: Int
     let pointsPerMinute: CGFloat
     let laneWidth: CGFloat
+    let warnings: [GuardrailWarning]
+    let currentBlockID: UUID?
+    let nextBlockID: UUID?
     let showsHeader: Bool
     let calendar: Calendar
     let dragState: TimelineDragState?
+    let onDropSomedayItem: (UUID, Date) -> Bool
     let onDragChanged: (PlannedBlock, Date) -> Void
     let onDragEnded: (PlannedBlock) -> Void
 
@@ -255,6 +281,55 @@ private struct TimelineCanvasView: View {
 
     private var nowOffset: CGFloat {
         yOffset(for: now)
+    }
+
+    private var gapItems: [TimelineGapItem] {
+        let sortedBlocks = blocks.sorted { $0.start < $1.start }
+        guard sortedBlocks.count > 1 else { return [] }
+
+        let defaultTips = [
+            "Hydration break",
+            "Transition gently",
+            "Small reset",
+            "Review next step"
+        ]
+
+        var tipIndex = 0
+        var warningIndex = 0
+        var items: [TimelineGapItem] = []
+
+        for pair in zip(sortedBlocks, sortedBlocks.dropFirst()) {
+            let gapMinutes = Int(pair.1.start.timeIntervalSince(pair.0.end) / 60)
+            guard gapMinutes >= 35 else { continue }
+
+            let center = pair.0.end.addingTimeInterval(pair.1.start.timeIntervalSince(pair.0.end) / 2)
+
+            if warningIndex < warnings.count {
+                let warning = warnings[warningIndex]
+                warningIndex += 1
+                items.append(
+                    TimelineGapItem(
+                        date: center,
+                        title: warning.message,
+                        detail: warning.detail,
+                        isWarning: true
+                    )
+                )
+            } else {
+                let tip = defaultTips[tipIndex % defaultTips.count]
+                tipIndex += 1
+                items.append(
+                    TimelineGapItem(
+                        date: center,
+                        title: tip,
+                        detail: "This open space can lower pressure before the next block.",
+                        isWarning: false
+                    )
+                )
+            }
+        }
+
+        return items
     }
 
     var body: some View {
@@ -283,6 +358,11 @@ private struct TimelineCanvasView: View {
                     .frame(height: showsHeader ? 52 : 0)
 
                 ZStack(alignment: .topLeading) {
+                    ForEach(gapItems) { gap in
+                        TimelineGapCard(item: gap)
+                            .offset(x: 96, y: yOffset(for: gap.date))
+                    }
+
                     ForEach(blocks) { block in
                         blockLayer(for: block)
                     }
@@ -309,6 +389,13 @@ private struct TimelineCanvasView: View {
             .frame(height: totalHeight + (showsHeader ? 52 : 0), alignment: .top)
         }
         .frame(maxWidth: .infinity, minHeight: totalHeight + (showsHeader ? 52 : 0), alignment: .top)
+        .dropDestination(for: String.self) { droppedIDs, location in
+            guard let rawID = droppedIDs.first, let itemID = UUID(uuidString: rawID) else {
+                return false
+            }
+
+            return onDropSomedayItem(itemID, date(at: location))
+        }
     }
 
     @ViewBuilder
@@ -321,6 +408,8 @@ private struct TimelineCanvasView: View {
                 now: now,
                 width: laneWidth,
                 pointsPerMinute: pointsPerMinute,
+                isCurrent: block.id == currentBlockID,
+                isNext: block.id == nextBlockID,
                 draggable: true,
                 onDragChanged: { proposed in
                     onDragChanged(block, proposed)
@@ -338,6 +427,8 @@ private struct TimelineCanvasView: View {
                 now: now,
                 width: laneWidth,
                 pointsPerMinute: pointsPerMinute,
+                isCurrent: block.id == currentBlockID,
+                isNext: block.id == nextBlockID,
                 draggable: block.source == .local && block.isProtected == false && block.isCompleted == false,
                 onDragChanged: { proposed in
                     onDragChanged(block, proposed)
@@ -359,6 +450,16 @@ private struct TimelineCanvasView: View {
         let clampedDate = min(max(date, range.lowerBound), range.upperBound)
         let minutes = clampedDate.timeIntervalSince(range.lowerBound) / 60
         return CGFloat(minutes) * pointsPerMinute
+    }
+
+    private func date(at location: CGPoint) -> Date {
+        let y = max(location.y - (showsHeader ? 52 : 0), 0)
+        let minutes = Double(y / pointsPerMinute)
+        let raw = range.lowerBound.addingTimeInterval(minutes * 60)
+        let snappedMinute = (calendar.component(.minute, from: raw) / slotMinutes) * slotMinutes
+        var snapped = calendar.date(bySetting: .minute, value: snappedMinute, of: raw) ?? raw
+        snapped = calendar.date(bySetting: .second, value: 0, of: snapped) ?? snapped
+        return snapped
     }
 
     private func strideDates(from start: Date, through end: Date, everyMinutes step: Int) -> [Date] {
@@ -449,6 +550,8 @@ private struct TimelineTaskCapsule: View {
     let now: Date
     let width: CGFloat
     let pointsPerMinute: CGFloat
+    let isCurrent: Bool
+    let isNext: Bool
     let draggable: Bool
     let onDragChanged: (Date) -> Void
     let onDragEnded: () -> Void
@@ -462,6 +565,12 @@ private struct TimelineTaskCapsule: View {
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
+            if isCurrent {
+                TimelineTag(text: "Now", tint: .red)
+            } else if isNext {
+                TimelineTag(text: "Next", tint: .blue)
+            }
+
             Image(systemName: statusSymbol)
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -474,7 +583,7 @@ private struct TimelineTaskCapsule: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(borderColor, lineWidth: 1)
+                .strokeBorder(borderColor, lineWidth: isCurrent ? 2 : 1)
         )
         .contentShape(.rect)
         .gesture(dragGesture)
@@ -520,6 +629,14 @@ private struct TimelineTaskCapsule: View {
     }
 
     private var borderColor: Color {
+        if isCurrent {
+            return .red.opacity(0.85)
+        }
+
+        if isNext {
+            return .blue.opacity(0.65)
+        }
+
         if block.isCompleted {
             return .green.opacity(0.5)
         }
@@ -555,6 +672,54 @@ private struct TimelineTaskCapsule: View {
         }
 
         return "\(span), upcoming"
+    }
+}
+
+private struct TimelineGapCard: View {
+    let item: TimelineGapItem
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: item.isWarning ? "exclamationmark.triangle.fill" : "sparkles")
+                .font(.caption)
+                .foregroundStyle(item.isWarning ? .orange : .mint)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(item.title)
+                    .font(.caption.bold())
+                Text(item.detail)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+        }
+        .padding(8)
+        .frame(width: 220, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill((item.isWarning ? Color.orange : .mint).opacity(0.16))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder((item.isWarning ? Color.orange : .mint).opacity(0.35), lineWidth: 1)
+        )
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(item.title)
+        .accessibilityValue(item.detail)
+    }
+}
+
+private struct TimelineTag: View {
+    let text: String
+    let tint: Color
+
+    var body: some View {
+        Text(text)
+            .font(.caption2.bold())
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .background(tint.opacity(0.15), in: Capsule())
+            .foregroundStyle(tint)
     }
 }
 
@@ -653,3 +818,11 @@ private struct TimelineDragState {
     var proposedStart: Date
     var conflictingBlockTitle: String?
 }
+private struct TimelineGapItem: Identifiable {
+    let id = UUID()
+    let date: Date
+    let title: String
+    let detail: String
+    let isWarning: Bool
+}
+

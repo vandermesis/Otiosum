@@ -2,19 +2,15 @@ import Foundation
 
 enum PlannerTab: String, CaseIterable, Identifiable, Sendable {
     case today
-    case jar
     case upcoming
-    case time
     case settings
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
-        case .today: "Today"
-        case .jar: "Jar"
-        case .upcoming: "Upcoming"
-        case .time: "Time"
+        case .today: "Now"
+        case .upcoming: "Future"
         case .settings: "Settings"
         }
     }

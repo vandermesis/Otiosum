@@ -145,6 +145,15 @@ final class PlannerShellViewModel {
         store.scheduleJarItem(item: item, lane: lane, on: selectedDay, modelContext: modelContext)
     }
 
+    func scheduleSomedayItem(
+        _ item: PlannableItem,
+        at date: Date,
+        modelContext: ModelContext
+    ) {
+        registerInteraction()
+        store.rescheduleItem(item, to: date, modelContext: modelContext)
+    }
+
     func toggleCompletion(
         for block: PlannedBlock,
         itemLookup: [UUID: PlannableItem],
