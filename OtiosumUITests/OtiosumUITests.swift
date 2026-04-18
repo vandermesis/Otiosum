@@ -27,12 +27,12 @@ final class OtiosumUITests: XCTestCase {
     func testSomedayDrawerAddsItemToNowTimeline() throws {
         let app = launchApp()
 
-        let expandButton = app.buttons["Expand"]
-        XCTAssertTrue(expandButton.waitForExistence(timeout: 2))
-        expandButton.tap()
+        let somedayButton = app.buttons["now-someday-sheet-button"]
+        XCTAssertTrue(somedayButton.waitForExistence(timeout: 2))
+        somedayButton.tap()
 
-        XCTAssertTrue(app.buttons["Someday"].waitForExistence(timeout: 2))
-        app.buttons["Someday"].tap()
+        XCTAssertTrue(app.navigationBars["Someday"].waitForExistence(timeout: 2))
+        app.buttons["Done"].tap()
 
         XCTAssertTrue(app.tabBars.buttons["Now"].exists)
     }

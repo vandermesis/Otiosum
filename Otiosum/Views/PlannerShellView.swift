@@ -11,6 +11,7 @@ struct PlannerShellView: View {
     @Query(sort: \DailyBudget.key) private var budgets: [DailyBudget]
 
     @State private var viewModel = PlannerShellViewModel()
+    @State private var isSomedaySheetPresented = false
 
     private var template: DayTemplate? { templates.first }
     private var budget: DailyBudget? { budgets.first }
@@ -55,18 +56,57 @@ struct PlannerShellView: View {
                     }
             } else {
                 TabView(selection: selectedTabBinding) {
-                    TodayScreen(
-                        day: selectedDayBinding,
-                        quickCapture: todayQuickCaptureBinding,
-                        plan: selectedDayPlan,
-                        budget: budgetSnapshot,
-                        calendarService: viewModel.calendarService,
-                        somedayItems: somedayItems,
-                        onRequestCalendarAccess: {
-                            Task {
-                                await viewModel.requestCalendarAccess()
+                    Tab("Now", systemImage: "sun.max.fill", value: PlannerTab.today) {
+                        TodayScreen(
+                            day: selectedDayBinding,
+                            plan: selectedDayPlan,
+                            budget: budgetSnapshot,
+                            calendarService: viewModel.calendarService,
+                            onRequestCalendarAccess: {
+                                Task {
+                                    await viewModel.requestCalendarAccess()
+                                }
+                            },
+                            onDropSomedayItem: { itemID, date in
+                                guard let item = itemLookup[itemID] else { return false }
+                                viewModel.scheduleSomedayItem(item, at: date, modelContext: modelContext)
+                                return true
+                            },
+                            onRescheduleBlock: { block, start in
+                                viewModel.rescheduleBlock(
+                                    block,
+                                    to: start,
+                                    itemLookup: itemLookup,
+                                    modelContext: modelContext
+                                )
                             }
-                        },
+                        )
+                    }
+
+                    Tab("Future", systemImage: "calendar", value: PlannerTab.upcoming) {
+                        FutureScreen(
+                            plans: upcomingPlans,
+                            budget: budgetSnapshot,
+                            calendarService: viewModel.calendarService
+                        )
+                    }
+
+                    if let template, let budget {
+                        Tab("Settings", systemImage: "slider.horizontal.3", value: PlannerTab.settings) {
+                            SettingsScreen(
+                                template: template,
+                                budget: budget,
+                                calendarService: viewModel.calendarService
+                            )
+                        }
+                    }
+                }
+                .tint(.black)
+                .background(PlannerBackground(simple: budgetSnapshot.useSimplifiedMode))
+                .highPriorityGesture(tabSwipeGesture)
+                .tabViewBottomAccessory(isEnabled: viewModel.selectedTab == .today) {
+                    NowQuickActionsAccessory(
+                        quickCapture: todayQuickCaptureBinding,
                         onCapture: {
                             viewModel.captureQuickItem(
                                 from: .today,
@@ -74,57 +114,11 @@ struct PlannerShellView: View {
                                 template: templateSnapshot
                             )
                         },
-                        onScheduleSomedayItem: { item, lane in
-                            viewModel.scheduleJarItem(
-                                item: item,
-                                lane: lane,
-                                modelContext: modelContext
-                            )
-                        },
-                        onDropSomedayItem: { itemID, date in
-                            guard let item = itemLookup[itemID] else { return false }
-                            viewModel.scheduleSomedayItem(item, at: date, modelContext: modelContext)
-                            return true
-                        },
-                        onRescheduleBlock: { block, start in
-                            viewModel.rescheduleBlock(
-                                block,
-                                to: start,
-                                itemLookup: itemLookup,
-                                modelContext: modelContext
-                            )
+                        onSomedayTap: {
+                            isSomedaySheetPresented = true
                         }
                     )
-                    .tag(PlannerTab.today)
-                    .tabItem {
-                        Label("Now", systemImage: "sun.max.fill")
-                    }
-
-                    FutureScreen(
-                        plans: upcomingPlans,
-                        budget: budgetSnapshot,
-                        calendarService: viewModel.calendarService
-                    )
-                    .tag(PlannerTab.upcoming)
-                    .tabItem {
-                        Label("Future", systemImage: "calendar")
-                    }
-
-                    if let template, let budget {
-                        SettingsScreen(
-                            template: template,
-                            budget: budget,
-                            calendarService: viewModel.calendarService
-                        )
-                        .tag(PlannerTab.settings)
-                        .tabItem {
-                            Label("Settings", systemImage: "slider.horizontal.3")
-                        }
-                    }
                 }
-                .tint(.black)
-                .background(PlannerBackground(simple: budgetSnapshot.useSimplifiedMode))
-                .highPriorityGesture(tabSwipeGesture)
             }
         }
         .task {
@@ -157,6 +151,28 @@ struct PlannerShellView: View {
                     }
                 }
             )
+        }
+        .sheet(isPresented: $isSomedaySheetPresented) {
+            NavigationStack {
+                SomedayDrawerContent(items: somedayItems) { item, lane in
+                    viewModel.scheduleJarItem(
+                        item: item,
+                        lane: lane,
+                        modelContext: modelContext
+                    )
+                }
+                .padding(16)
+                .navigationTitle("Someday")
+                .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("Done") {
+                            isSomedaySheetPresented = false
+                        }
+                    }
+                }
+            }
+            .presentationDetents([.height(180), .medium, .large])
+            .presentationDragIndicator(.visible)
         }
     }
 
@@ -220,5 +236,92 @@ struct PlannerShellView: View {
             get: { viewModel.pendingCalendarShift },
             set: { viewModel.pendingCalendarShift = $0 }
         )
+    }
+}
+
+private struct NowQuickActionsAccessory: View {
+    @Environment(\.tabViewBottomAccessoryPlacement) private var placement
+
+    @Binding var quickCapture: String
+    let onCapture: () -> Void
+    let onSomedayTap: () -> Void
+
+    var body: some View {
+        Group {
+            switch placement {
+            case .inline:
+                InlineAccessoryLayout(
+                    quickCapture: $quickCapture,
+                    onCapture: onCapture,
+                    onSomedayTap: onSomedayTap
+                )
+            case .expanded, .none:
+                ExpandedAccessoryLayout(
+                    quickCapture: $quickCapture,
+                    onCapture: onCapture,
+                    onSomedayTap: onSomedayTap
+                )
+            @unknown default:
+                ExpandedAccessoryLayout(
+                    quickCapture: $quickCapture,
+                    onCapture: onCapture,
+                    onSomedayTap: onSomedayTap
+                )
+            }
+        }
+    }
+}
+
+private struct InlineAccessoryLayout: View {
+    @Binding var quickCapture: String
+    let onCapture: () -> Void
+    let onSomedayTap: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            TextField("One word is enough", text: $quickCapture)
+                .textFieldStyle(.roundedBorder)
+                .submitLabel(.done)
+                .onSubmit(onCapture)
+                .accessibilityIdentifier("now-quick-add-field")
+
+            Button("Add", systemImage: "plus.circle.fill", action: onCapture)
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+                .accessibilityIdentifier("now-quick-add-button")
+
+            Button("Someday", systemImage: "archivebox", action: onSomedayTap)
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .accessibilityIdentifier("now-someday-sheet-button")
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+    }
+}
+
+private struct ExpandedAccessoryLayout: View {
+    @Binding var quickCapture: String
+    let onCapture: () -> Void
+    let onSomedayTap: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            TextField("One word is enough", text: $quickCapture)
+                .textFieldStyle(.roundedBorder)
+                .submitLabel(.done)
+                .onSubmit(onCapture)
+                .accessibilityIdentifier("now-quick-add-field")
+
+            Button("Add", systemImage: "plus.circle.fill", action: onCapture)
+                .buttonStyle(.borderedProminent)
+                .accessibilityIdentifier("now-quick-add-button")
+
+            Button("Someday", systemImage: "archivebox", action: onSomedayTap)
+                .buttonStyle(.bordered)
+                .accessibilityIdentifier("now-someday-sheet-button")
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
     }
 }
