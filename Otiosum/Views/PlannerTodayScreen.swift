@@ -16,7 +16,7 @@ struct TodayScreen: View {
                 PlannerBackground(simple: budget.useSimplifiedMode)
 
                 VStack(spacing: 12) {
-                    DayHeader(day: $day)
+                    DayHeader(day: day)
                         .padding(.horizontal, 18)
                         .padding(.top, 10)
 
@@ -52,8 +52,6 @@ private struct NowTimelineSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Now")
-                .font(.title3.bold())
             Text("A single view of what is active, what is next, and where open space is available.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)

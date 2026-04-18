@@ -21,7 +21,8 @@ struct TimeWheelView: View {
     private let calendar = Calendar.current
     private let slotMinutes = 5
     private let pointsPerMinute: CGFloat = 2.2
-    private let visibleHourRange: Double = 12
+    // Keep the timeline window finite so SwiftUI doesn't build hundreds of thousands of rows.
+    private let visibleDayRange: Int = 3
 
     init(
         day: Date = .now,
@@ -46,7 +47,7 @@ struct TimeWheelView: View {
     var body: some View {
         TimelineView(.periodic(from: .now, by: 30)) { context in
             let now = context.date
-            let range = timelineRange(for: day)
+            let range = timelineRange(reference: now)
 
             GeometryReader { proxy in
                 let laneWidth = max(proxy.size.width - 124, 180)
@@ -99,7 +100,9 @@ struct TimeWheelView: View {
                             jumpToNow(using: now)
                         }
                         .buttonStyle(.borderedProminent)
-                        .padding(16)
+                        .padding(.top, 12)
+                        .padding(.trailing, 12)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
                         .accessibilityHint("Centers the timeline around the current time")
                     }
                 }
@@ -116,10 +119,10 @@ struct TimeWheelView: View {
         .sensoryFeedback(.error, trigger: invalidDropFeedbackToken)
     }
 
-    private func timelineRange(for date: Date) -> ClosedRange<Date> {
-        let dayStart = calendar.startOfDay(for: date)
-        let start = dayStart.addingTimeInterval(-visibleHourRange * 60 * 60)
-        let end = dayStart.addingTimeInterval((24 + visibleHourRange) * 60 * 60)
+    private func timelineRange(reference: Date) -> ClosedRange<Date> {
+        let referenceDayStart = calendar.startOfDay(for: reference)
+        let start = calendar.date(byAdding: .day, value: -visibleDayRange, to: referenceDayStart) ?? referenceDayStart
+        let end = calendar.date(byAdding: .day, value: visibleDayRange + 1, to: referenceDayStart) ?? referenceDayStart
         return start...end
     }
 
@@ -342,10 +345,9 @@ private struct TimelineCanvasView: View {
                 }
 
                 ForEach(slots, id: \.self) { slot in
+                    let style = TimelineGridStyle.make(for: slot, calendar: calendar)
                     TimelineTickRow(
-                        date: slot,
-                        isMajor: calendar.component(.minute, from: slot) == 0,
-                        isQuarterHour: calendar.component(.minute, from: slot).isMultiple(of: 15),
+                        style: style,
                         slotHeight: slotHeight
                     )
                     .id(slot)
@@ -498,21 +500,19 @@ private struct TimelineLegendView: View {
 }
 
 private struct TimelineTickRow: View {
-    let date: Date
-    let isMajor: Bool
-    let isQuarterHour: Bool
+    let style: TimelineGridStyle
     let slotHeight: CGFloat
 
     var body: some View {
         HStack(spacing: 10) {
-            Text(label)
-                .font(isMajor ? .caption.bold() : .caption2)
-                .foregroundStyle(isMajor ? .primary : .secondary)
+            Text(style.label)
+                .font(labelFont)
+                .foregroundStyle(labelColor)
                 .frame(width: 72, alignment: .trailing)
 
             Rectangle()
-                .fill(lineColor)
-                .frame(height: isMajor ? 1 : 0.5)
+                .fill(.primary.opacity(style.lineOpacity))
+                .frame(height: style.lineThickness)
 
             Spacer(minLength: 0)
         }
@@ -520,28 +520,24 @@ private struct TimelineTickRow: View {
         .accessibilityHidden(true)
     }
 
-    private var lineColor: Color {
-        if isMajor {
-            return .primary.opacity(0.25)
+    private var labelFont: Font {
+        switch style.tier {
+        case .month, .day:
+            .caption.bold()
+        case .hour:
+            .caption
+        case .quarterHour, .minor:
+            .caption2
         }
-
-        if isQuarterHour {
-            return .primary.opacity(0.13)
-        }
-
-        return .primary.opacity(0.08)
     }
 
-    private var label: String {
-        if isMajor {
-            return date.formatted(.dateTime.hour(.defaultDigits(amPM: .abbreviated)))
+    private var labelColor: Color {
+        switch style.tier {
+        case .month, .day:
+            .primary
+        case .hour, .quarterHour, .minor:
+            .secondary
         }
-
-        if isQuarterHour {
-            return date.formatted(.dateTime.minute(.twoDigits))
-        }
-
-        return ""
     }
 }
 
@@ -825,4 +821,3 @@ private struct TimelineGapItem: Identifiable {
     let detail: String
     let isWarning: Bool
 }
-

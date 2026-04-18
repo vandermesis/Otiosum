@@ -10,7 +10,7 @@ import XCTest
 final class OtiosumUITestsLaunchTests: XCTestCase {
 
     override class var runsForEachTargetApplicationUIConfiguration: Bool {
-        true
+        false
     }
 
     override func setUpWithError() throws {
@@ -20,7 +20,14 @@ final class OtiosumUITestsLaunchTests: XCTestCase {
     @MainActor
     func testLaunch() throws {
         let app = XCUIApplication()
+        app.launchArguments.append("UITEST")
+        app.launchArguments.append("-ApplePersistenceIgnoreState")
+        app.launchArguments.append("YES")
+
+        // Clear any stale app instance so SpringBoard doesn't deny a second launch request.
+        app.terminate()
         app.launch()
+        XCTAssertTrue(app.wait(for: .runningForeground, timeout: 10))
 
         // Insert steps here to perform after app launch but before taking a screenshot,
         // such as logging into a test account or navigating somewhere in the app

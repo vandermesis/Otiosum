@@ -70,6 +70,42 @@ struct OtiosumTests {
         #expect(approximatelyEqual(tenSecondStyle.thickness, 2))
     }
 
+    @Test(
+        "Timeline grid marks month/day/hour boundaries correctly",
+        arguments: [
+            (2026, 4, 1, 0, 0, "month"),
+            (2026, 4, 2, 0, 0, "day"),
+            (2026, 4, 2, 9, 0, "hour"),
+            (2026, 4, 2, 9, 15, "quarterHour"),
+            (2026, 4, 2, 9, 5, "minor")
+        ]
+    )
+    func timelineGridBoundaryClassification(
+        year: Int,
+        month: Int,
+        day: Int,
+        hour: Int,
+        minute: Int,
+        expectedTier: String
+    ) throws {
+        let date = try makeDate(year: year, month: month, day: day, hour: hour, minute: minute, second: 0)
+        let style = TimelineGridStyle.make(for: date, calendar: calendar)
+
+        #expect(timelineGridTierIdentifier(style.tier) == expectedTier)
+    }
+
+    @Test("Timeline grid labels major boundaries and keeps minor ticks unlabeled")
+    func timelineGridLabelRules() throws {
+        let dayStart = try makeDate(year: 2026, month: 4, day: 3, hour: 0, minute: 0, second: 0)
+        let minorTick = try makeDate(year: 2026, month: 4, day: 3, hour: 0, minute: 5, second: 0)
+
+        let dayStartStyle = TimelineGridStyle.make(for: dayStart, calendar: calendar)
+        let minorStyle = TimelineGridStyle.make(for: minorTick, calendar: calendar)
+
+        #expect(dayStartStyle.label.isEmpty == false)
+        #expect(minorStyle.label.isEmpty)
+    }
+
     private func makeDate(
         year: Int,
         month: Int,
@@ -115,6 +151,21 @@ struct OtiosumTests {
             "tenSecond"
         case .second:
             "second"
+        }
+    }
+
+    private func timelineGridTierIdentifier(_ tier: TimelineGridTier) -> String {
+        switch tier {
+        case .month:
+            "month"
+        case .day:
+            "day"
+        case .hour:
+            "hour"
+        case .quarterHour:
+            "quarterHour"
+        case .minor:
+            "minor"
         }
     }
 }

@@ -16,6 +16,74 @@ enum TimeWheelTickTier {
     case second
 }
 
+enum TimelineGridTier {
+    case month
+    case day
+    case hour
+    case quarterHour
+    case minor
+}
+
+struct TimelineGridStyle {
+    let tier: TimelineGridTier
+    let label: String
+    let lineOpacity: CGFloat
+    let lineThickness: CGFloat
+
+    static func make(
+        for date: Date,
+        calendar: Calendar = .current
+    ) -> TimelineGridStyle {
+        let components = calendar.dateComponents([.day, .hour, .minute], from: date)
+        let minute = components.minute ?? 0
+        let hour = components.hour ?? 0
+        let day = components.day ?? 1
+
+        if day == 1, hour == 0, minute == 0 {
+            return TimelineGridStyle(
+                tier: .month,
+                label: date.formatted(.dateTime.month(.abbreviated).day()),
+                lineOpacity: 0.32,
+                lineThickness: 1.2
+            )
+        }
+
+        if hour == 0, minute == 0 {
+            return TimelineGridStyle(
+                tier: .day,
+                label: date.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)),
+                lineOpacity: 0.26,
+                lineThickness: 1.0
+            )
+        }
+
+        if minute == 0 {
+            return TimelineGridStyle(
+                tier: .hour,
+                label: date.formatted(.dateTime.hour(.defaultDigits(amPM: .abbreviated))),
+                lineOpacity: 0.20,
+                lineThickness: 0.9
+            )
+        }
+
+        if minute.isMultiple(of: 15) {
+            return TimelineGridStyle(
+                tier: .quarterHour,
+                label: date.formatted(.dateTime.minute(.twoDigits)),
+                lineOpacity: 0.12,
+                lineThickness: 0.7
+            )
+        }
+
+        return TimelineGridStyle(
+            tier: .minor,
+            label: "",
+            lineOpacity: 0.08,
+            lineThickness: 0.5
+        )
+    }
+}
+
 struct TimeWheelTickStyle {
     let tier: TimeWheelTickTier
     let label: String

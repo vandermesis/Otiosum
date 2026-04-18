@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct DayHeader: View {
-    @Binding var day: Date
+    let day: Date
 
     var body: some View {
         HStack(alignment: .center) {
@@ -13,32 +13,7 @@ struct DayHeader: View {
             }
 
             Spacer()
-
-            HStack(spacing: 8) {
-                Button {
-                    shiftDay(by: -1)
-                } label: {
-                    Image(systemName: "chevron.left")
-                }
-
-                Button("Now") {
-                    day = .now
-                }
-
-                Button {
-                    shiftDay(by: 1)
-                } label: {
-                    Image(systemName: "chevron.right")
-                }
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(.white.opacity(0.72))
-            .foregroundStyle(.black)
         }
-    }
-
-    private func shiftDay(by amount: Int) {
-        day = Calendar.current.date(byAdding: .day, value: amount, to: day) ?? day
     }
 }
 
