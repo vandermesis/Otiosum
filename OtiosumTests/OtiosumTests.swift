@@ -41,7 +41,7 @@ struct OtiosumTests {
 
         let style = TimeWheelTickStyle.make(for: date, calendar: calendar)
 
-        #expect(style.tier == expectedTier)
+        #expect(tierIdentifier(style.tier) == tierIdentifier(expectedTier))
     }
 
     @Test("Major ticks expose labels while second ticks stay unlabeled")
@@ -97,5 +97,24 @@ struct OtiosumTests {
 
     private func approximatelyEqual(_ lhs: CGFloat, _ rhs: CGFloat, tolerance: CGFloat = 0.0001) -> Bool {
         abs(lhs - rhs) <= tolerance
+    }
+
+    private func tierIdentifier(_ tier: TimeWheelTickTier) -> String {
+        switch tier {
+        case .year:
+            "year"
+        case .month:
+            "month"
+        case .day:
+            "day"
+        case .hour:
+            "hour"
+        case .minute:
+            "minute"
+        case .tenSecond:
+            "tenSecond"
+        case .second:
+            "second"
+        }
     }
 }
