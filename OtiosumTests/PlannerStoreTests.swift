@@ -21,41 +21,36 @@ struct PlannerStoreTests {
         #expect(store.didSeedDefaults)
     }
 
-    @Test("Jar quick capture creates an unscheduled jar item and clears input")
-    func captureQuickItemFromJar() throws {
+    @Test("Archiving quick capture creates an unscheduled archived event and clears input")
+    func archiveQuickEvent() throws {
         let modelContext = try makeModelContext()
         let store = PlannerStore()
         try store.ensureSeedData(in: modelContext)
 
-        store.jarQuickCapture = "read chapter"
-        store.captureQuickItem(
-            from: .jar,
-            modelContext: modelContext,
-            day: Date(timeIntervalSinceReferenceDate: 50_000),
-            template: .default
-        )
+        store.todayQuickCapture = "read chapter"
+        store.archiveQuickEvent(modelContext: modelContext)
 
-        let items = try modelContext.fetch(FetchDescriptor<PlannableItem>())
+        let items = try modelContext.fetch(FetchDescriptor<Event>())
         let item = try #require(items.first)
 
         #expect(item.title == "Read chapter")
-        #expect(item.isInJar)
+        #expect(item.isArchived)
         #expect(item.scheduledDay == nil)
         #expect(item.preferredStartMinutes == nil)
         #expect(item.preferredTimeWindow == .anytime)
-        #expect(store.jarQuickCapture.isEmpty)
+        #expect(store.todayQuickCapture.isEmpty)
     }
 
-    @Test("Applying return-to-jar overflow choice updates item and clears pending state")
-    func applyOverflowChoiceReturnToJar() throws {
+    @Test("Applying archive overflow choice updates event and clears pending state")
+    func applyOverflowChoiceArchive() throws {
         let modelContext = try makeModelContext()
         let store = PlannerStore()
-        let item = PlannableItem(
+        let item = Event(
             title: "Late task",
             suggestedIcon: "moon.stars",
             tintToken: "indigo",
             scheduledDay: Date(timeIntervalSinceReferenceDate: 60_000),
-            isInJar: false,
+            isArchived: false,
             forceAfterBedtime: true
         )
         modelContext.insert(item)
@@ -72,7 +67,7 @@ struct PlannerStoreTests {
 
         store.applyOverflowChoice(.returnToJar, modelContext: modelContext)
 
-        #expect(item.isInJar)
+        #expect(item.isArchived)
         #expect(item.scheduledDay == nil)
         #expect(item.forceAfterBedtime == false)
         #expect(store.pendingOverflow == nil)
@@ -85,12 +80,12 @@ struct PlannerStoreTests {
         let selectedDay = Date(timeIntervalSinceReferenceDate: 80_000)
         store.selectedDay = selectedDay
 
-        let item = PlannableItem(
+        let item = Event(
             title: "Packed evening",
             suggestedIcon: "calendar",
             tintToken: "sky",
             scheduledDay: nil,
-            isInJar: true,
+            isArchived: true,
             forceAfterBedtime: false
         )
         modelContext.insert(item)
@@ -109,35 +104,35 @@ struct PlannerStoreTests {
 
         #expect(item.scheduledDay == selectedDay)
         #expect(item.forceAfterBedtime)
-        #expect(item.isInJar == false)
+        #expect(item.isArchived == false)
         #expect(store.pendingOverflow == nil)
     }
 
-    @Test("Rescheduling item updates day, start, and clears jar state")
-    func rescheduleItemUpdatesTimingFields() throws {
+    @Test("Rescheduling event updates day, start, and clears archive state")
+    func rescheduleEventUpdatesTimingFields() throws {
         let modelContext = try makeModelContext()
         let store = PlannerStore()
 
         let start = Date(timeIntervalSinceReferenceDate: 100_000)
-        let item = PlannableItem(
+        let item = Event(
             title: "Move me",
             suggestedIcon: "calendar",
             tintToken: "sky",
             scheduledDay: nil,
             preferredStartMinutes: nil,
-            isInJar: true,
+            isArchived: true,
             forceAfterBedtime: true
         )
 
         modelContext.insert(item)
         try modelContext.save()
 
-        store.rescheduleItem(item, to: start, modelContext: modelContext)
+        store.rescheduleEvent(item, to: start, modelContext: modelContext)
 
         let calendar = Calendar.current
         #expect(item.scheduledDay == calendar.startOfDay(for: start))
         #expect(item.preferredStartMinutes == start.minutesSinceStartOfDay(using: calendar))
-        #expect(item.isInJar == false)
+        #expect(item.isArchived == false)
         #expect(item.forceAfterBedtime == false)
     }
 
@@ -151,15 +146,14 @@ struct PlannerStoreTests {
         let preferredStart = Calendar.current.date(byAdding: .minute, value: 14 * 60 + 30, to: day) ?? day
         store.todayQuickCapture = "plan sprint"
 
-        store.captureQuickItem(
-            from: .today,
+        store.captureQuickEvent(
             modelContext: modelContext,
             day: day,
             template: .default,
             preferredStartDate: preferredStart
         )
 
-        let items = try modelContext.fetch(FetchDescriptor<PlannableItem>())
+        let items = try modelContext.fetch(FetchDescriptor<Event>())
         let item = try #require(items.first)
 
         #expect(item.title == "Plan sprint")
@@ -173,7 +167,7 @@ struct PlannerStoreTests {
         let modelContext = try makeModelContext()
         let store = PlannerStore()
 
-        let item = PlannableItem(
+        let item = Event(
             title: "Stretch duration",
             suggestedIcon: "clock",
             tintToken: "sky",
@@ -190,32 +184,32 @@ struct PlannerStoreTests {
         #expect(item.targetDurationMinutes == 15)
     }
 
-    @Test("Starting item now reschedules and clears completion")
-    func startItemNowReschedules() throws {
+    @Test("Starting event now reschedules and clears completion")
+    func startEventNowReschedules() throws {
         let modelContext = try makeModelContext()
         let store = PlannerStore()
 
         let originalDate = Date(timeIntervalSinceReferenceDate: 130_000)
-        let item = PlannableItem(
+        let item = Event(
             title: "Start now task",
             suggestedIcon: "play.fill",
             tintToken: "mint",
             scheduledDay: originalDate,
             preferredStartMinutes: 8 * 60,
             isCompleted: true,
-            isInJar: true
+            isArchived: true
         )
         modelContext.insert(item)
         try modelContext.save()
 
         let start = Date(timeIntervalSinceReferenceDate: 140_000)
-        store.startItemNow(item, at: start, modelContext: modelContext)
+        store.startEventNow(item, at: start, modelContext: modelContext)
 
         let calendar = Calendar.current
         #expect(item.scheduledDay == calendar.startOfDay(for: start))
         #expect(item.preferredStartMinutes == start.minutesSinceStartOfDay(using: calendar))
         #expect(item.isCompleted == false)
-        #expect(item.isInJar == false)
+        #expect(item.isArchived == false)
     }
 
     @Test("Quick add from Today uses provided timeline anchor and configured default duration")
@@ -227,8 +221,7 @@ struct PlannerStoreTests {
         let day = Calendar.current.startOfDay(for: Date(timeIntervalSinceReferenceDate: 160_000))
         let anchor = Calendar.current.date(byAdding: .hour, value: 14, to: day) ?? day
         store.todayQuickCapture = "focus block"
-        store.captureQuickItem(
-            from: .today,
+        store.captureQuickEvent(
             modelContext: modelContext,
             day: day,
             template: .default,
@@ -236,7 +229,7 @@ struct PlannerStoreTests {
             preferredStartDate: anchor
         )
 
-        let items = try modelContext.fetch(FetchDescriptor<PlannableItem>())
+        let items = try modelContext.fetch(FetchDescriptor<Event>())
         let item = try #require(items.first)
         #expect(item.title == "Focus block")
         #expect(item.scheduledDay == day)
@@ -245,19 +238,19 @@ struct PlannerStoreTests {
         #expect(store.todayQuickCapture.isEmpty)
     }
 
-    @Test("Adding quick item to someday creates jar item from today input")
-    func addQuickItemToSomedayFromTodayInput() throws {
+    @Test("Archiving quick event creates archived event from today input")
+    func archiveQuickEventFromTodayInput() throws {
         let modelContext = try makeModelContext()
         let store = PlannerStore()
         try store.ensureSeedData(in: modelContext)
 
         store.todayQuickCapture = "someday maybe"
-        store.addQuickItemToSomeday(modelContext: modelContext)
+        store.archiveQuickEvent(modelContext: modelContext)
 
-        let items = try modelContext.fetch(FetchDescriptor<PlannableItem>())
+        let items = try modelContext.fetch(FetchDescriptor<Event>())
         let item = try #require(items.first)
         #expect(item.title == "Someday maybe")
-        #expect(item.isInJar)
+        #expect(item.isArchived)
         #expect(item.scheduledDay == nil)
         #expect(store.todayQuickCapture.isEmpty)
     }
@@ -322,7 +315,7 @@ struct PlannerStoreTests {
     private func makeModelContext() throws -> ModelContext {
         let schema = Schema([
             Item.self,
-            PlannableItem.self,
+            Event.self,
             CalendarLink.self,
             DayTemplate.self,
             DailyBudget.self

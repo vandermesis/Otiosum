@@ -15,13 +15,13 @@ struct PlannerViewModel {
         budgets.first?.snapshot ?? .default
     }
 
-    func itemLookup(from items: [PlannableItem]) -> [UUID: PlannableItem] {
+    func itemLookup(from items: [Event]) -> [UUID: Event] {
         Dictionary(uniqueKeysWithValues: items.map { ($0.id, $0) })
     }
 
     func makeDayPlan(
         day: Date,
-        items: [PlannableItem],
+        items: [Event],
         calendarEvents: [CalendarEventSnapshot],
         calendarLinks: [CalendarLink],
         template: DayTemplateSnapshot,
@@ -41,7 +41,7 @@ struct PlannerViewModel {
 
     func makeUpcomingPlans(
         selectedDay: Date,
-        items: [PlannableItem],
+        items: [Event],
         calendarLinks: [CalendarLink],
         template: DayTemplateSnapshot,
         budget: DailyBudgetSnapshot,

@@ -5,10 +5,8 @@ import SwiftData
 @MainActor
 @Observable
 final class PlannerStore {
-    var selectedTab: PlannerTab = .today
     var selectedDay: Date = .now
     var todayQuickCapture: String = ""
-    var jarQuickCapture: String = ""
     var pendingOverflow: PendingOverflowState?
     var pendingCalendarShift: PendingCalendarShiftState?
     var lastUserInteraction: Date?
@@ -45,90 +43,65 @@ final class PlannerStore {
         )
     }
 
-    func captureQuickItem(
-        from context: QuickCaptureContext,
+    func captureQuickEvent(
         modelContext: ModelContext,
         day: Date,
         template: DayTemplateSnapshot,
         defaultDurationMinutes: Int = 30,
         preferredStartDate: Date? = nil
     ) {
-        let rawTitle: String
-        switch context {
-        case .today:
-            rawTitle = todayQuickCapture
-        case .jar:
-            rawTitle = jarQuickCapture
-        }
-
-        let title = rawTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        let title = todayQuickCapture.trimmingCharacters(in: .whitespacesAndNewlines)
         guard title.isEmpty == false else { return }
 
-        let kind = IconSuggester.inferredKind(for: title)
-        let icon = IconSuggester.suggest(for: title, kind: kind)
+        let icon = IconSuggester.suggest(for: title)
         let resolvedPreferredStartMinutes: Int?
-        if context == .today {
-            if let preferredStartDate {
-                resolvedPreferredStartMinutes = max(0, min(23 * 60 + 55, preferredStartDate.minutesSinceStartOfDay(using: .current)))
-            } else {
-                resolvedPreferredStartMinutes = roundedStartMinutes(template: template)
-            }
+        if let preferredStartDate {
+            resolvedPreferredStartMinutes = max(0, min(23 * 60 + 55, preferredStartDate.minutesSinceStartOfDay(using: .current)))
         } else {
-            resolvedPreferredStartMinutes = nil
+            resolvedPreferredStartMinutes = roundedStartMinutes(template: template)
         }
-        let item = PlannableItem(
+        let event = Event(
             title: title.capitalizedSentence,
-            kind: kind,
             source: .local,
             suggestedIcon: icon.symbolName,
             tintToken: icon.tintToken,
             targetDurationMinutes: max(15, defaultDurationMinutes),
             minimumDurationMinutes: 15,
-            scheduledDay: context == .today ? day : nil,
+            scheduledDay: day,
             preferredStartMinutes: resolvedPreferredStartMinutes,
-            preferredTimeWindow: context == .today
-                ? inferredWindow(for: day, startMinutes: resolvedPreferredStartMinutes ?? 0)
-                : .anytime,
+            preferredTimeWindow: inferredWindow(for: day, startMinutes: resolvedPreferredStartMinutes ?? 0),
             flexibility: .flexible,
             notes: "",
             isCompleted: false,
-            isInJar: context == .jar
+            isArchived: false
         )
 
-        modelContext.insert(item)
+        modelContext.insert(event)
         try? modelContext.save()
-
-        switch context {
-        case .today:
-            todayQuickCapture = ""
-        case .jar:
-            jarQuickCapture = ""
-        }
+        todayQuickCapture = ""
     }
 
-    func scheduleJarItem(
-        item: PlannableItem,
+    func restoreArchivedEvent(
+        _ event: Event,
         lane: DropLane,
         on day: Date,
         modelContext: ModelContext
     ) {
-        item.isInJar = false
-        item.scheduledDay = day
-        item.preferredTimeWindow = lane.timeWindow
-        item.preferredStartMinutes = lane.timeWindow.startMinutes
-        item.forceAfterBedtime = false
+        event.isArchived = false
+        event.scheduledDay = day
+        event.preferredTimeWindow = lane.timeWindow
+        event.preferredStartMinutes = lane.timeWindow.startMinutes
+        event.forceAfterBedtime = false
         try? modelContext.save()
     }
 
-    func addQuickItemToSomeday(modelContext: ModelContext) {
+    func archiveQuickEvent(modelContext: ModelContext) {
         let title = todayQuickCapture.trimmingCharacters(in: .whitespacesAndNewlines)
         guard title.isEmpty == false else { return }
 
-        let kind = IconSuggester.inferredKind(for: title)
-        let icon = IconSuggester.suggest(for: title, kind: kind)
-        let item = PlannableItem(
+        let icon = IconSuggester.suggest(for: title)
+        let event = Event(
             title: title.capitalizedSentence,
-            kind: kind,
             source: .local,
             suggestedIcon: icon.symbolName,
             tintToken: icon.tintToken,
@@ -140,90 +113,90 @@ final class PlannerStore {
             flexibility: .flexible,
             notes: "",
             isCompleted: false,
-            isInJar: true
+            isArchived: true
         )
 
-        modelContext.insert(item)
+        modelContext.insert(event)
         try? modelContext.save()
         todayQuickCapture = ""
     }
 
-    func moveItemLater(
-        _ item: PlannableItem,
+    func moveEventLater(
+        _ event: Event,
         by minutes: Int = 30,
         on day: Date,
         modelContext: ModelContext
     ) {
-        item.scheduledDay = day
-        item.preferredStartMinutes = (item.preferredStartMinutes ?? roundedStartMinutes(template: .default)) + minutes
-        item.isInJar = false
+        event.scheduledDay = day
+        event.preferredStartMinutes = (event.preferredStartMinutes ?? roundedStartMinutes(template: .default)) + minutes
+        event.isArchived = false
         try? modelContext.save()
     }
 
-    func rescheduleItem(
-        _ item: PlannableItem,
+    func rescheduleEvent(
+        _ event: Event,
         to start: Date,
         modelContext: ModelContext
     ) {
         let calendar = Calendar.current
-        item.scheduledDay = calendar.startOfDay(for: start)
-        item.preferredStartMinutes = max(0, min(23 * 60 + 55, start.minutesSinceStartOfDay(using: calendar)))
-        item.preferredTimeWindow = inferredWindow(for: start)
-        item.isInJar = false
-        item.forceAfterBedtime = false
+        event.scheduledDay = calendar.startOfDay(for: start)
+        event.preferredStartMinutes = max(0, min(23 * 60 + 55, start.minutesSinceStartOfDay(using: calendar)))
+        event.preferredTimeWindow = inferredWindow(for: start)
+        event.isArchived = false
+        event.forceAfterBedtime = false
         try? modelContext.save()
     }
 
     func toggleCompletion(
-        _ item: PlannableItem,
+        _ event: Event,
         modelContext: ModelContext
     ) {
-        item.isCompleted.toggle()
+        event.isCompleted.toggle()
         try? modelContext.save()
     }
 
     func setCompletion(
-        _ item: PlannableItem,
+        _ event: Event,
         isCompleted: Bool,
         modelContext: ModelContext
     ) {
-        item.isCompleted = isCompleted
+        event.isCompleted = isCompleted
         try? modelContext.save()
     }
 
-    func startItemNow(
-        _ item: PlannableItem,
+    func startEventNow(
+        _ event: Event,
         at start: Date = .now,
         modelContext: ModelContext
     ) {
         let calendar = Calendar.current
-        item.scheduledDay = calendar.startOfDay(for: start)
-        item.preferredStartMinutes = max(0, min(23 * 60 + 55, start.minutesSinceStartOfDay(using: calendar)))
-        item.preferredTimeWindow = inferredWindow(for: start)
-        item.isCompleted = false
-        item.isInJar = false
-        item.forceAfterBedtime = false
+        event.scheduledDay = calendar.startOfDay(for: start)
+        event.preferredStartMinutes = max(0, min(23 * 60 + 55, start.minutesSinceStartOfDay(using: calendar)))
+        event.preferredTimeWindow = inferredWindow(for: start)
+        event.isCompleted = false
+        event.isArchived = false
+        event.forceAfterBedtime = false
         try? modelContext.save()
     }
 
     func adjustDuration(
-        for item: PlannableItem,
+        for event: Event,
         by deltaMinutes: Int,
         modelContext: ModelContext
     ) {
-        let minDuration = max(15, item.minimumDurationMinutes)
-        let adjusted = item.targetDurationMinutes + deltaMinutes
-        item.targetDurationMinutes = min(240, max(minDuration, adjusted))
+        let minDuration = max(15, event.minimumDurationMinutes)
+        let adjusted = event.targetDurationMinutes + deltaMinutes
+        event.targetDurationMinutes = min(240, max(minDuration, adjusted))
         try? modelContext.save()
     }
 
-    func returnToJar(
-        _ item: PlannableItem,
+    func archiveEvent(
+        _ event: Event,
         modelContext: ModelContext
     ) {
-        item.isInJar = true
-        item.scheduledDay = nil
-        item.forceAfterBedtime = false
+        event.isArchived = true
+        event.scheduledDay = nil
+        event.forceAfterBedtime = false
         try? modelContext.save()
     }
 
@@ -270,7 +243,7 @@ final class PlannerStore {
     ) {
         guard
             let pendingOverflow,
-            let item = findItem(with: pendingOverflow.itemID, in: modelContext)
+            let event = findEvent(with: pendingOverflow.itemID, in: modelContext)
         else {
             self.pendingOverflow = nil
             return
@@ -278,18 +251,18 @@ final class PlannerStore {
 
         switch choice {
         case .nextSuitableDay:
-            item.scheduledDay = pendingOverflow.suggestedDate
-            item.preferredStartMinutes = nil
-            item.forceAfterBedtime = false
-            item.isInJar = false
+            event.scheduledDay = pendingOverflow.suggestedDate
+            event.preferredStartMinutes = nil
+            event.forceAfterBedtime = false
+            event.isArchived = false
         case .returnToJar:
-            item.scheduledDay = nil
-            item.isInJar = true
-            item.forceAfterBedtime = false
+            event.scheduledDay = nil
+            event.isArchived = true
+            event.forceAfterBedtime = false
         case .keepAnyway:
-            item.scheduledDay = selectedDay
-            item.forceAfterBedtime = true
-            item.isInJar = false
+            event.scheduledDay = selectedDay
+            event.forceAfterBedtime = true
+            event.isArchived = false
         }
 
         try? modelContext.save()
@@ -367,13 +340,13 @@ final class PlannerStore {
         return newLink
     }
 
-    private func findItem(
+    private func findEvent(
         with id: UUID,
         in modelContext: ModelContext
-    ) -> PlannableItem? {
-        let descriptor = FetchDescriptor<PlannableItem>(
-            predicate: #Predicate { item in
-                item.id == id
+    ) -> Event? {
+        let descriptor = FetchDescriptor<Event>(
+            predicate: #Predicate { event in
+                event.id == id
             }
         )
 

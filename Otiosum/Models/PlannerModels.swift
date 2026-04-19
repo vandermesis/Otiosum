@@ -2,10 +2,9 @@ import Foundation
 import SwiftData
 
 @Model
-final class PlannableItem {
+final class Event {
     @Attribute(.unique) var id: UUID
     var title: String
-    var kindRaw: String
     var sourceRaw: String
     var suggestedIcon: String
     var tintToken: String
@@ -21,13 +20,12 @@ final class PlannableItem {
     var isCompleted: Bool
     var createdAt: Date
     var orderHint: Double
-    var isInJar: Bool
+    var isArchived: Bool
     var forceAfterBedtime: Bool
 
     init(
         id: UUID = UUID(),
         title: String,
-        kind: PlannerItemKind = .task,
         source: PlannerItemSource = .local,
         suggestedIcon: String,
         tintToken: String,
@@ -43,12 +41,11 @@ final class PlannableItem {
         isCompleted: Bool = false,
         createdAt: Date = .now,
         orderHint: Double = .random(in: 0..<1_000_000),
-        isInJar: Bool = false,
+        isArchived: Bool = false,
         forceAfterBedtime: Bool = false
     ) {
         self.id = id
         self.title = title
-        self.kindRaw = kind.rawValue
         self.sourceRaw = source.rawValue
         self.suggestedIcon = suggestedIcon
         self.tintToken = tintToken
@@ -64,13 +61,8 @@ final class PlannableItem {
         self.isCompleted = isCompleted
         self.createdAt = createdAt
         self.orderHint = orderHint
-        self.isInJar = isInJar
+        self.isArchived = isArchived
         self.forceAfterBedtime = forceAfterBedtime
-    }
-
-    var kind: PlannerItemKind {
-        get { PlannerItemKind(rawValue: kindRaw) ?? .task }
-        set { kindRaw = newValue.rawValue }
     }
 
     var source: PlannerItemSource {
@@ -96,11 +88,10 @@ final class PlannableItem {
         set { protectedCategoryRaw = newValue?.rawValue }
     }
 
-    var snapshot: PlannerItemSnapshot {
-        PlannerItemSnapshot(
+    var snapshot: EventSnapshot {
+        EventSnapshot(
             id: id,
             title: title,
-            kind: kind,
             source: source,
             suggestedIcon: suggestedIcon,
             tintToken: tintToken,
@@ -115,7 +106,7 @@ final class PlannableItem {
             notes: notes,
             isCompleted: isCompleted,
             orderHint: orderHint,
-            isInJar: isInJar,
+            isArchived: isArchived,
             forceAfterBedtime: forceAfterBedtime
         )
     }

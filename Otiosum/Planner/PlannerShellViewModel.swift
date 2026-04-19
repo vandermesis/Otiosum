@@ -5,11 +5,6 @@ import SwiftData
 @MainActor
 @Observable
 final class PlannerShellViewModel {
-    var selectedTab: PlannerTab {
-        get { store.selectedTab }
-        set { store.selectedTab = newValue }
-    }
-
     var selectedDay: Date {
         get { store.selectedDay }
         set { store.selectedDay = newValue }
@@ -20,25 +15,16 @@ final class PlannerShellViewModel {
         set { store.todayQuickCapture = newValue }
     }
 
-    var todayQuickCaptureKind: PlannerItemKind {
-        IconSuggester.inferredKind(for: todayQuickCapture)
-    }
-
     var todayQuickCaptureSuggestion: IconSuggestion? {
         let title = todayQuickCapture.trimmingCharacters(in: .whitespacesAndNewlines)
         guard title.isEmpty == false else { return nil }
-        return IconSuggester.suggest(for: title, kind: todayQuickCaptureKind)
+        return IconSuggester.suggest(for: title)
     }
 
     var todayQuickCaptureSuggestions: [IconSuggestion] {
         let title = todayQuickCapture.trimmingCharacters(in: .whitespacesAndNewlines)
         guard title.isEmpty == false else { return [] }
-        return IconSuggester.suggestions(for: title, kind: todayQuickCaptureKind)
-    }
-
-    var jarQuickCapture: String {
-        get { store.jarQuickCapture }
-        set { store.jarQuickCapture = newValue }
+        return IconSuggester.suggestions(for: title)
     }
 
     var pendingOverflow: PendingOverflowState? {
@@ -91,12 +77,12 @@ final class PlannerShellViewModel {
         plannerViewModel.budgetSnapshot(from: budgets)
     }
 
-    func itemLookup(from items: [PlannableItem]) -> [UUID: PlannableItem] {
+    func eventLookup(from items: [Event]) -> [UUID: Event] {
         plannerViewModel.itemLookup(from: items)
     }
 
     func makeSelectedDayPlan(
-        items: [PlannableItem],
+        items: [Event],
         calendarLinks: [CalendarLink],
         template: DayTemplateSnapshot,
         budget: DailyBudgetSnapshot,
@@ -114,7 +100,7 @@ final class PlannerShellViewModel {
     }
 
     func makeUpcomingPlans(
-        items: [PlannableItem],
+        items: [Event],
         calendarLinks: [CalendarLink],
         template: DayTemplateSnapshot,
         budget: DailyBudgetSnapshot,
@@ -139,15 +125,13 @@ final class PlannerShellViewModel {
         plannerViewModel.makePromptKey(for: plan)
     }
 
-    func captureQuickItem(
-        from context: QuickCaptureContext,
+    func captureQuickEvent(
         modelContext: ModelContext,
         template: DayTemplateSnapshot,
         defaultDurationMinutes: Int = 30,
         preferredStartDate: Date? = nil
     ) {
-        store.captureQuickItem(
-            from: context,
+        store.captureQuickEvent(
             modelContext: modelContext,
             day: selectedDay,
             template: template,
@@ -156,104 +140,104 @@ final class PlannerShellViewModel {
         )
     }
 
-    func addQuickItemToSomeday(modelContext: ModelContext) {
+    func archiveQuickEvent(modelContext: ModelContext) {
         registerInteraction()
-        store.addQuickItemToSomeday(modelContext: modelContext)
+        store.archiveQuickEvent(modelContext: modelContext)
     }
 
-    func scheduleJarItem(
-        item: PlannableItem,
+    func restoreArchivedEvent(
+        _ event: Event,
         lane: DropLane,
         modelContext: ModelContext
     ) {
         registerInteraction()
-        store.scheduleJarItem(item: item, lane: lane, on: selectedDay, modelContext: modelContext)
+        store.restoreArchivedEvent(event, lane: lane, on: selectedDay, modelContext: modelContext)
     }
 
-    func scheduleSomedayItem(
-        _ item: PlannableItem,
+    func scheduleArchivedEvent(
+        _ event: Event,
         at date: Date,
         modelContext: ModelContext
     ) {
         registerInteraction()
-        store.rescheduleItem(item, to: date, modelContext: modelContext)
+        store.rescheduleEvent(event, to: date, modelContext: modelContext)
     }
 
     func toggleCompletion(
         for block: PlannedBlock,
-        itemLookup: [UUID: PlannableItem],
+        itemLookup: [UUID: Event],
         modelContext: ModelContext
     ) {
         registerInteraction()
-        guard let item = itemLookup[block.itemID] else { return }
-        store.toggleCompletion(item, modelContext: modelContext)
+        guard let event = itemLookup[block.itemID] else { return }
+        store.toggleCompletion(event, modelContext: modelContext)
     }
 
     func moveItemLater(
         for block: PlannedBlock,
-        itemLookup: [UUID: PlannableItem],
+        itemLookup: [UUID: Event],
         modelContext: ModelContext
     ) {
         registerInteraction()
-        guard let item = itemLookup[block.itemID] else { return }
-        store.moveItemLater(item, on: selectedDay, modelContext: modelContext)
+        guard let event = itemLookup[block.itemID] else { return }
+        store.moveEventLater(event, on: selectedDay, modelContext: modelContext)
     }
 
-    func returnToJar(
+    func archiveEvent(
         for block: PlannedBlock,
-        itemLookup: [UUID: PlannableItem],
+        itemLookup: [UUID: Event],
         modelContext: ModelContext
     ) {
         registerInteraction()
-        guard let item = itemLookup[block.itemID] else { return }
-        store.returnToJar(item, modelContext: modelContext)
+        guard let event = itemLookup[block.itemID] else { return }
+        store.archiveEvent(event, modelContext: modelContext)
     }
 
     func rescheduleBlock(
         _ block: PlannedBlock,
         to start: Date,
-        itemLookup: [UUID: PlannableItem],
+        itemLookup: [UUID: Event],
         modelContext: ModelContext
     ) {
         registerInteraction()
         guard block.source == .local, block.isProtected == false else { return }
-        guard let item = itemLookup[block.itemID] else { return }
-        store.rescheduleItem(item, to: start, modelContext: modelContext)
+        guard let event = itemLookup[block.itemID] else { return }
+        store.rescheduleEvent(event, to: start, modelContext: modelContext)
     }
 
     func adjustDuration(
         for block: PlannedBlock,
         by deltaMinutes: Int,
-        itemLookup: [UUID: PlannableItem],
+        itemLookup: [UUID: Event],
         modelContext: ModelContext
     ) {
         registerInteraction()
         guard block.source == .local, block.isProtected == false else { return }
-        guard let item = itemLookup[block.itemID] else { return }
-        store.adjustDuration(for: item, by: deltaMinutes, modelContext: modelContext)
+        guard let event = itemLookup[block.itemID] else { return }
+        store.adjustDuration(for: event, by: deltaMinutes, modelContext: modelContext)
     }
 
     func markStartedNow(
         for block: PlannedBlock,
-        itemLookup: [UUID: PlannableItem],
+        itemLookup: [UUID: Event],
         modelContext: ModelContext
     ) {
         registerInteraction()
         guard block.source == .local, block.isProtected == false else { return }
-        guard let item = itemLookup[block.itemID] else { return }
-        store.startItemNow(item, modelContext: modelContext)
+        guard let event = itemLookup[block.itemID] else { return }
+        store.startEventNow(event, modelContext: modelContext)
     }
 
     func setCompletion(
         for block: PlannedBlock,
         isCompleted: Bool,
-        itemLookup: [UUID: PlannableItem],
+        itemLookup: [UUID: Event],
         modelContext: ModelContext
     ) {
         registerInteraction()
         guard block.source == .local else { return }
-        guard let item = itemLookup[block.itemID] else { return }
-        store.setCompletion(item, isCompleted: isCompleted, modelContext: modelContext)
+        guard let event = itemLookup[block.itemID] else { return }
+        store.setCompletion(event, isCompleted: isCompleted, modelContext: modelContext)
     }
 
     func updateCalendarFlexibility(

@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		BACE1D092F9533C100C64D3C /* SFSymbolsDB in Resources */ = {isa = PBXBuildFile; fileRef = BACE1D082F9533C100C64D3C /* SFSymbolsDB */; };
+		BACE1D092F9533C100C64D3C /* SFSymbolsDB.txt in Resources */ = {isa = PBXBuildFile; fileRef = BACE1D082F9533C100C64D3C /* SFSymbolsDB.txt */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -31,7 +31,7 @@
 		BA06E1B32F918249003135A9 /* Otiosum.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Otiosum.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		BA06E1C42F91824A003135A9 /* OtiosumTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = OtiosumTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		BA06E1CE2F91824A003135A9 /* OtiosumUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = OtiosumUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		BACE1D082F9533C100C64D3C /* SFSymbolsDB */ = {isa = PBXFileReference; lastKnownFileType = text; path = SFSymbolsDB; sourceTree = "<group>"; };
+		BACE1D082F9533C100C64D3C /* SFSymbolsDB.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = SFSymbolsDB.txt; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -93,7 +93,7 @@
 		BA06E1AA2F918249003135A9 = {
 			isa = PBXGroup;
 			children = (
-				BACE1D082F9533C100C64D3C /* SFSymbolsDB */,
+				BACE1D082F9533C100C64D3C /* SFSymbolsDB.txt */,
 				BA06E1B52F918249003135A9 /* Otiosum */,
 				BA06E1C72F91824A003135A9 /* OtiosumTests */,
 				BA06E1D12F91824A003135A9 /* OtiosumUITests */,
@@ -231,7 +231,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				BACE1D092F9533C100C64D3C /* SFSymbolsDB in Resources */,
+				BACE1D092F9533C100C64D3C /* SFSymbolsDB.txt in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

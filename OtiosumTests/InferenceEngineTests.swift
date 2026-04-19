@@ -31,7 +31,6 @@ struct InferenceEngineTests {
             start: now.addingTimeInterval(-600),
             end: now.addingTimeInterval(600),
             source: .template,
-            kind: .protectedTime,
             protectedCategory: .rest
         )
 
@@ -140,7 +139,6 @@ struct InferenceEngineTests {
         start: Date,
         end: Date,
         source: PlannerItemSource = .local,
-        kind: PlannerItemKind = .task,
         flexibility: PlannerFlexibility = .flexible,
         protectedCategory: ProtectedCategory? = nil,
         isCompleted: Bool = false
@@ -153,7 +151,6 @@ struct InferenceEngineTests {
             start: start,
             end: end,
             source: source,
-            kind: kind,
             flexibility: flexibility,
             symbolName: "checklist",
             tintToken: "mint",

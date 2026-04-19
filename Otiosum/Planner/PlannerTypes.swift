@@ -1,30 +1,5 @@
 import Foundation
 
-enum PlannerTab: String, CaseIterable, Identifiable, Sendable {
-    case today
-    case upcoming
-    case settings
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .today: "Now"
-        case .upcoming: "Future"
-        case .settings: "Settings"
-        }
-    }
-}
-
-enum PlannerItemKind: String, Codable, CaseIterable, Identifiable, Sendable {
-    case task
-    case event
-    case idea
-    case protectedTime
-
-    var id: String { rawValue }
-}
-
 enum PlannerItemSource: String, Codable, CaseIterable, Identifiable, Sendable {
     case local
     case calendar
@@ -111,7 +86,7 @@ enum OverflowChoice: String, Codable, CaseIterable, Identifiable, Sendable {
     var title: String {
         switch self {
         case .nextSuitableDay: "Move to another day"
-        case .returnToJar: "Return to jar"
+        case .returnToJar: "Move to archive"
         case .keepAnyway: "Keep anyway"
         }
     }
@@ -159,13 +134,6 @@ enum GuardrailSeverity: String, Codable, CaseIterable, Identifiable, Sendable {
     var id: String { rawValue }
 }
 
-enum QuickCaptureContext: String, Codable, CaseIterable, Identifiable, Sendable {
-    case today
-    case jar
-
-    var id: String { rawValue }
-}
-
 enum TimelineQuickAction: String, CaseIterable, Identifiable, Sendable {
     case startNow
     case markDone
@@ -207,10 +175,9 @@ struct IconSuggestion: Equatable, Sendable {
     let emoji: String
 }
 
-struct PlannerItemSnapshot: Identifiable, Equatable, Sendable {
+struct EventSnapshot: Identifiable, Equatable, Sendable {
     let id: UUID
     let title: String
-    let kind: PlannerItemKind
     let source: PlannerItemSource
     let suggestedIcon: String
     let tintToken: String
@@ -225,11 +192,11 @@ struct PlannerItemSnapshot: Identifiable, Equatable, Sendable {
     let notes: String
     let isCompleted: Bool
     let orderHint: Double
-    let isInJar: Bool
+    let isArchived: Bool
     let forceAfterBedtime: Bool
 
     var isProtected: Bool {
-        protectedCategory != nil || kind == .protectedTime || source == .template
+        protectedCategory != nil || source == .template
     }
 }
 
@@ -311,7 +278,6 @@ struct PlannedBlock: Identifiable, Equatable, Sendable {
     let start: Date
     let end: Date
     let source: PlannerItemSource
-    let kind: PlannerItemKind
     let flexibility: PlannerFlexibility
     let symbolName: String
     let tintToken: String
@@ -327,7 +293,7 @@ struct PlannedBlock: Identifiable, Equatable, Sendable {
     }
 
     var isProtected: Bool {
-        protectedCategory != nil || kind == .protectedTime || source == .template
+        protectedCategory != nil || source == .template
     }
 }
 

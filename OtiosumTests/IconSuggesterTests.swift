@@ -31,28 +31,13 @@ struct IconSuggesterTests {
         #expect(suggestion.emoji == expectedEmoji)
     }
 
-    @Test("Fallback suggestion depends on item kind when no keyword matches")
-    func fallbackByKind() {
-        let eventSuggestion = IconSuggester.suggest(for: "xylophone", kind: .event)
-        let ideaSuggestion = IconSuggester.suggest(for: "xylophone", kind: .idea)
-        let protectedSuggestion = IconSuggester.suggest(for: "xylophone", kind: .protectedTime)
-        let taskSuggestion = IconSuggester.suggest(for: "xylophone", kind: .task)
+    @Test("Fallback suggestion is stable when no keyword matches")
+    func fallbackSuggestion() {
+        let suggestion = IconSuggester.suggest(for: "xylophone")
 
-        #expect(eventSuggestion.symbolName == "calendar")
-        #expect(eventSuggestion.tintToken == "sky")
-        #expect(eventSuggestion.emoji == "🗓️")
-
-        #expect(ideaSuggestion.symbolName == "lightbulb")
-        #expect(ideaSuggestion.tintToken == "amber")
-        #expect(ideaSuggestion.emoji == "💡")
-
-        #expect(protectedSuggestion.symbolName == "heart")
-        #expect(protectedSuggestion.tintToken == "rose")
-        #expect(protectedSuggestion.emoji == "🫶")
-
-        #expect(taskSuggestion.symbolName == "checklist")
-        #expect(taskSuggestion.tintToken == "mint")
-        #expect(taskSuggestion.emoji == "✓")
+        #expect(suggestion.symbolName == "calendar")
+        #expect(suggestion.tintToken == "sky")
+        #expect(suggestion.emoji == "🗓️")
     }
 
     @Test("Trimmed and lowercased titles still match mappings")
@@ -72,24 +57,16 @@ struct IconSuggesterTests {
 
     @Test("Suggestions are ranked with the strongest match first")
     func suggestionsAreRanked() {
-        let suggestions = IconSuggester.suggestions(for: "doctor appointment", kind: .event)
+        let suggestions = IconSuggester.suggestions(for: "doctor appointment")
 
         #expect(suggestions.first?.symbolName == "person.crop.circle.badge.clock")
     }
 
     @Test("Suggestions append fallback when requested limit exceeds direct matches")
     func suggestionsAppendFallback() {
-        let suggestions = IconSuggester.suggestions(for: "deep work review", kind: .task, limit: 3)
+        let suggestions = IconSuggester.suggestions(for: "deep work review", limit: 3)
 
         #expect(suggestions.first?.symbolName == "laptopcomputer")
-        #expect(suggestions.contains { $0.symbolName == "checklist" })
-    }
-
-    @Test("Inferred kind uses user text semantics")
-    func inferredKindFromTitle() {
-        #expect(IconSuggester.inferredKind(for: "Brainstorm outline") == .idea)
-        #expect(IconSuggester.inferredKind(for: "Doctor appointment") == .event)
-        #expect(IconSuggester.inferredKind(for: "Nap before dinner") == .protectedTime)
-        #expect(IconSuggester.inferredKind(for: "Finish laundry") == .task)
+        #expect(suggestions.contains { $0.symbolName == "calendar" })
     }
 }

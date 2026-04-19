@@ -14,7 +14,7 @@ struct PlannerEngine {
 
     func plan(
         for day: Date,
-        localItems: [PlannerItemSnapshot],
+        localItems: [EventSnapshot],
         calendarEvents: [CalendarEventSnapshot],
         calendarLinks: [CalendarLinkSnapshot],
         template: DayTemplateSnapshot,
@@ -49,7 +49,7 @@ struct PlannerEngine {
         let scheduledItems = localItems
             .filter { item in
                 guard let scheduledDay = item.scheduledDay else { return false }
-                return calendar.isDate(scheduledDay, inSameDayAs: day) && item.isInJar == false
+                return calendar.isDate(scheduledDay, inSameDayAs: day) && item.isArchived == false
             }
             .sorted(by: localItemSort)
 
@@ -125,7 +125,7 @@ struct PlannerEngine {
     }
 
     private func place(
-        item: PlannerItemSnapshot,
+        item: EventSnapshot,
         day: Date,
         existingBlocks: [PlannedBlock],
         template: DayTemplateSnapshot,
@@ -170,7 +170,6 @@ struct PlannerEngine {
                 start: candidateStart,
                 end: candidateEnd,
                 source: item.source,
-                kind: item.kind,
                 flexibility: item.flexibility,
                 symbolName: item.suggestedIcon,
                 tintToken: item.tintToken,
@@ -197,7 +196,7 @@ struct PlannerEngine {
 
     private func applyOverrunIfNeeded(
         to blocks: [PlannedBlock],
-        itemLookup: [UUID: PlannerItemSnapshot],
+        itemLookup: [UUID: EventSnapshot],
         context: InferenceContext,
         day: Date,
         template: DayTemplateSnapshot,
@@ -334,7 +333,6 @@ struct PlannerEngine {
                 start: block.start,
                 end: block.end,
                 source: block.source,
-                kind: block.kind,
                 flexibility: block.flexibility,
                 symbolName: block.symbolName,
                 tintToken: block.tintToken,
@@ -443,7 +441,6 @@ struct PlannerEngine {
             start: start,
             end: endDate,
             source: .template,
-            kind: .protectedTime,
             flexibility: .locked,
             symbolName: symbol,
             tintToken: tintToken,
@@ -467,7 +464,7 @@ struct PlannerEngine {
 
         return calendarEvents.map { event in
             let link = linksByEventID[event.id]
-            let icon = IconSuggester.suggest(for: event.title, kind: .event)
+            let icon = IconSuggester.suggest(for: event.title)
             let start = max(link?.localOverrideStart ?? event.start, startOfDay)
             let end = min(link?.localOverrideEnd ?? event.end, endOfDay)
 
@@ -479,7 +476,6 @@ struct PlannerEngine {
                 start: start,
                 end: max(start.adding(minutes: 15), end),
                 source: .calendar,
-                kind: .event,
                 flexibility: link?.flexibility ?? .askBeforeMove,
                 symbolName: icon.symbolName,
                 tintToken: icon.tintToken,
@@ -611,7 +607,6 @@ struct PlannerEngine {
             start: start,
             end: end,
             source: block.source,
-            kind: block.kind,
             flexibility: block.flexibility,
             symbolName: block.symbolName,
             tintToken: block.tintToken,
@@ -624,7 +619,7 @@ struct PlannerEngine {
         )
     }
 
-    private func localItemSort(_ lhs: PlannerItemSnapshot, _ rhs: PlannerItemSnapshot) -> Bool {
+    private func localItemSort(_ lhs: EventSnapshot, _ rhs: EventSnapshot) -> Bool {
         let lhsStart = lhs.preferredStartMinutes ?? lhs.preferredTimeWindow.startMinutes
         let rhsStart = rhs.preferredStartMinutes ?? rhs.preferredTimeWindow.startMinutes
 

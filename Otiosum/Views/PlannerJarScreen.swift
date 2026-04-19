@@ -1,13 +1,13 @@
 import SwiftUI
 
 struct SomedayDrawerContent: View {
-    let items: [PlannableItem]
-    let onSchedule: (PlannableItem, DropLane) -> Void
+    let items: [Event]
+    let onSchedule: (Event, DropLane) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("Someday")
+                Text("Archive")
                     .font(.headline)
                 Spacer()
                 Text("\(items.count)")
@@ -17,8 +17,8 @@ struct SomedayDrawerContent: View {
 
             if items.isEmpty {
                 CalmEmptyState(
-                    title: "Someday is clear",
-                    message: "Add ideas with Quick Add and move them here when you want less pressure."
+                    title: "Archive is clear",
+                    message: "Archive events with Quick Add and restore them when you want them back on the timeline."
                 )
             } else {
                 ScrollView(.vertical) {
@@ -40,7 +40,7 @@ struct SomedayDrawerContent: View {
         }
     }
 
-    private func lane(for item: PlannableItem) -> DropLane {
+    private func lane(for item: Event) -> DropLane {
         switch item.preferredTimeWindow {
         case .morning: return .morning
         case .afternoon: return .afternoon
@@ -59,7 +59,7 @@ struct SomedayDrawerContent: View {
 }
 
 private struct SomedayItemBall: View {
-    let item: PlannableItem
+    let item: Event
     let onAddToNow: () -> Void
 
     var body: some View {

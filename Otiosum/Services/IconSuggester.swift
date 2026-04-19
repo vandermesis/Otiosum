@@ -1,44 +1,23 @@
 import Foundation
 
 enum IconSuggester {
-    static func inferredKind(for title: String, default defaultKind: PlannerItemKind = .task) -> PlannerItemKind {
-        let query = NormalizedQuery(title)
-
-        guard query.isEmpty == false else { return defaultKind }
-
-        let scoredKind = PlannerItemKind.allCases
-            .map { kind in
-                (kind, scoreKind(kind, query: query))
-            }
-            .max { lhs, rhs in
-                if lhs.1 == rhs.1 {
-                    return lhs.0.rawValue > rhs.0.rawValue
-                }
-                return lhs.1 < rhs.1
-            }
-
-        guard let scoredKind, scoredKind.1 > 0 else { return defaultKind }
-        return scoredKind.0
-    }
-
-    static func suggest(for title: String, kind: PlannerItemKind = .task) -> IconSuggestion {
-        suggestions(for: title, kind: kind, limit: 1).first ?? fallback(for: kind)
+    static func suggest(for title: String) -> IconSuggestion {
+        suggestions(for: title, limit: 1).first ?? fallback
     }
 
     static func suggestions(
         for title: String,
-        kind: PlannerItemKind = .task,
         limit: Int = 3
     ) -> [IconSuggestion] {
         let resolvedLimit = max(1, limit)
         let query = NormalizedQuery(title)
 
         guard query.isEmpty == false else {
-            return [fallback(for: kind)]
+            return [fallback]
         }
 
         let rankedMatches: [RankedIconSuggestion] = catalog.compactMap { entry -> RankedIconSuggestion? in
-                let score = score(entry, query: query, kind: kind)
+                let score = score(entry, query: query)
                 guard score > 0 else { return nil }
                 return RankedIconSuggestion(score: score, suggestion: entry.iconSuggestion)
             }
@@ -49,7 +28,6 @@ enum IconSuggester {
                 suggestions.append(ranked.suggestion)
             }
 
-        let fallback = fallback(for: kind)
         if rankedSuggestions.isEmpty {
             return [fallback]
         }
@@ -62,26 +40,13 @@ enum IconSuggester {
         return limitedSuggestions
     }
 
-    private static func fallback(for kind: PlannerItemKind) -> IconSuggestion {
-        switch kind {
-        case .event:
-            IconSuggestion(symbolName: "calendar", tintToken: "sky", emoji: "🗓️")
-        case .idea:
-            IconSuggestion(symbolName: "lightbulb", tintToken: "amber", emoji: "💡")
-        case .protectedTime:
-            IconSuggestion(symbolName: "heart", tintToken: "rose", emoji: "🫶")
-        case .task:
-            IconSuggestion(symbolName: "checklist", tintToken: "mint", emoji: "✓")
-        }
-    }
+    private static let fallback = IconSuggestion(symbolName: "calendar", tintToken: "sky", emoji: "🗓️")
 
-    private static func score(_ entry: IconCatalogEntry, query: NormalizedQuery, kind: PlannerItemKind) -> Int {
+    private static func score(_ entry: IconCatalogEntry, query: NormalizedQuery) -> Int {
         let termScores = entry.searchTerms.map { score($0, query: query) }
         let bestTermScore = termScores.max() ?? 0
         guard bestTermScore > 0 else { return 0 }
-
-        let kindBonus = entry.preferredKinds.contains(kind) ? 15 : 0
-        return bestTermScore + kindBonus
+        return bestTermScore
     }
 
     private static func score(_ term: NormalizedTerm, query: NormalizedQuery) -> Int {
@@ -120,107 +85,76 @@ enum IconSuggester {
         return 0
     }
 
-    private static func scoreKind(_ kind: PlannerItemKind, query: NormalizedQuery) -> Int {
-        kindIndicators[kind, default: []]
-            .map { score($0, query: query) }
-            .max() ?? 0
-    }
-
-    private static let kindIndicators: [PlannerItemKind: [NormalizedTerm]] = [
-        .idea: NormalizedTerm.makeAll([
-            "idea", "brainstorm", "note", "concept", "sketch", "draft"
-        ]),
-        .event: NormalizedTerm.makeAll([
-            "meeting", "appointment", "call", "visit", "reservation", "event"
-        ]),
-        .protectedTime: NormalizedTerm.makeAll([
-            "rest", "reset", "recover", "sleep", "nap", "family"
-        ]),
-        .task: NormalizedTerm.makeAll([
-            "task", "todo", "errand", "work", "finish", "complete"
-        ])
-    ]
-
     private static let catalog: [IconCatalogEntry] = [
         IconCatalogEntry(
             symbolName: "bed.double.fill",
             tintToken: "indigo",
             emoji: "🛏️",
             terms: ["sleep", "bed", "nap", "rest early", "go to bed"],
-            synonyms: ["bedtime", "sleeping", "power nap"],
-            preferredKinds: [.protectedTime, .task]
+            synonyms: ["bedtime", "sleeping", "power nap"]
         ),
         IconCatalogEntry(
             symbolName: "fork.knife",
             tintToken: "peach",
             emoji: "🍽️",
             terms: ["eat", "meal", "lunch", "breakfast", "dinner", "food"],
-            synonyms: ["snack", "brunch", "supper", "cook", "groceries"],
-            preferredKinds: [.task, .protectedTime]
+            synonyms: ["snack", "brunch", "supper", "cook", "groceries"]
         ),
         IconCatalogEntry(
             symbolName: "sofa.fill",
             tintToken: "sand",
             emoji: "🛋️",
             terms: ["rest", "relax", "quiet", "pause", "recover"],
-            synonyms: ["reset", "unwind", "downtime", "break"],
-            preferredKinds: [.protectedTime, .task]
+            synonyms: ["reset", "unwind", "downtime", "break"]
         ),
         IconCatalogEntry(
             symbolName: "figure.walk",
             tintToken: "lime",
             emoji: "🏃",
             terms: ["walk", "run", "gym", "workout", "exercise"],
-            synonyms: ["stretch", "fitness", "jog", "movement", "cardio"],
-            preferredKinds: [.task, .protectedTime]
+            synonyms: ["stretch", "fitness", "jog", "movement", "cardio"]
         ),
         IconCatalogEntry(
             symbolName: "person.crop.circle.badge.clock",
             tintToken: "sky",
             emoji: "📅",
             terms: ["call", "meeting", "doctor", "therapy", "appointment"],
-            synonyms: ["checkup", "session", "consultation", "visit", "interview"],
-            preferredKinds: [.event, .task]
+            synonyms: ["checkup", "session", "consultation", "visit", "interview"]
         ),
         IconCatalogEntry(
             symbolName: "sparkles",
             tintToken: "amber",
             emoji: "💡",
             terms: ["idea", "brainstorm", "think", "plan"],
-            synonyms: ["concept", "outline", "draft", "vision", "notes"],
-            preferredKinds: [.idea, .task]
+            synonyms: ["concept", "outline", "draft", "vision", "notes"]
         ),
         IconCatalogEntry(
             symbolName: "star.fill",
             tintToken: "violet",
             emoji: "✨",
             terms: ["music", "read", "book", "movie", "play"],
-            synonyms: ["podcast", "game", "watch", "listen", "creative"],
-            preferredKinds: [.idea, .task]
+            synonyms: ["podcast", "game", "watch", "listen", "creative"]
         ),
         IconCatalogEntry(
             symbolName: "house.fill",
             tintToken: "sage",
             emoji: "🏠",
             terms: ["home", "clean", "laundry", "dish"],
-            synonyms: ["tidy", "chores", "kitchen", "vacuum", "organize"],
-            preferredKinds: [.task]
+            synonyms: ["tidy", "chores", "kitchen", "vacuum", "organize"]
         ),
         IconCatalogEntry(
             symbolName: "laptopcomputer",
             tintToken: "teal",
             emoji: "💻",
             terms: ["code", "write", "focus", "work", "email"],
-            synonyms: ["deep work", "project", "review", "study", "admin"],
-            preferredKinds: [.task, .idea]
+            synonyms: ["deep work", "project", "review", "study", "admin"]
         ),
         IconCatalogEntry(
             symbolName: "cart.fill",
             tintToken: "mint",
             emoji: "🛒",
             terms: ["shop", "store", "buy", "pickup"],
-            synonyms: ["errand", "market", "pharmacy", "target"],
-            preferredKinds: [.task]
+            synonyms: ["errand", "market", "pharmacy", "target"]
         )
     ]
 }
@@ -240,19 +174,16 @@ private struct RankedIconSuggestion: Comparable {
 private struct IconCatalogEntry {
     let iconSuggestion: IconSuggestion
     let searchTerms: [NormalizedTerm]
-    let preferredKinds: Set<PlannerItemKind>
 
     init(
         symbolName: String,
         tintToken: String,
         emoji: String,
         terms: [String],
-        synonyms: [String] = [],
-        preferredKinds: Set<PlannerItemKind> = []
+        synonyms: [String] = []
     ) {
         self.iconSuggestion = IconSuggestion(symbolName: symbolName, tintToken: tintToken, emoji: emoji)
         self.searchTerms = NormalizedTerm.makeAll(terms + synonyms)
-        self.preferredKinds = preferredKinds
     }
 }
 

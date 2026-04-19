@@ -296,7 +296,7 @@ struct MiniBlockRow: View {
 }
 
 struct JarBallCard: View {
-    let item: PlannableItem
+    let item: Event
 
     var body: some View {
         let icon = IconSuggestion(symbolName: item.suggestedIcon, tintToken: item.tintToken, emoji: "•")
@@ -305,7 +305,7 @@ struct JarBallCard: View {
             HStack {
                 PlannerIcon(symbolName: icon.symbolName, tintToken: icon.tintToken)
                 Spacer()
-                Text(item.kind == .idea ? "Idea" : "Jar")
+                Text("Archive")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
             }

@@ -5,7 +5,7 @@ struct PlannerShellView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
 
-    @Query(sort: \PlannableItem.createdAt) private var items: [PlannableItem]
+    @Query(sort: \Event.createdAt) private var items: [Event]
     @Query(sort: \CalendarLink.updatedAt) private var calendarLinks: [CalendarLink]
     @Query(sort: \DayTemplate.key) private var templates: [DayTemplate]
     @Query(sort: \DailyBudget.key) private var budgets: [DailyBudget]
@@ -19,7 +19,7 @@ struct PlannerShellView: View {
     private var budget: DailyBudget? { budgets.first }
     private var templateSnapshot: DayTemplateSnapshot { viewModel.templateSnapshot(from: templates) }
     private var budgetSnapshot: DailyBudgetSnapshot { viewModel.budgetSnapshot(from: budgets) }
-    private var itemLookup: [UUID: PlannableItem] { viewModel.itemLookup(from: items) }
+    private var eventLookup: [UUID: Event] { viewModel.eventLookup(from: items) }
 
     private var selectedDayPlan: DayPlan {
         viewModel.makeSelectedDayPlan(
@@ -31,8 +31,8 @@ struct PlannerShellView: View {
         )
     }
 
-    private var somedayItems: [PlannableItem] {
-        items.filter { $0.isInJar || $0.scheduledDay == nil }
+    private var archivedEvents: [Event] {
+        items.filter { $0.isArchived || $0.scheduledDay == nil }
     }
 
     private var promptKey: String {
@@ -61,17 +61,17 @@ struct PlannerShellView: View {
                             Task {
                                 await viewModel.requestCalendarAccess()
                             }
-                        },
+                        },                        
                         onDropSomedayItem: { itemID, date in
-                            guard let item = itemLookup[itemID] else { return false }
-                            viewModel.scheduleSomedayItem(item, at: date, modelContext: modelContext)
+                            guard let event = eventLookup[itemID] else { return false }
+                            viewModel.scheduleArchivedEvent(event, at: date, modelContext: modelContext)
                             return true
                         },
                         onRescheduleBlock: { block, start in
                             viewModel.rescheduleBlock(
                                 block,
                                 to: start,
-                                itemLookup: itemLookup,
+                                itemLookup: eventLookup,
                                 modelContext: modelContext
                             )
                         },
@@ -79,7 +79,7 @@ struct PlannerShellView: View {
                             viewModel.adjustDuration(
                                 for: block,
                                 by: deltaMinutes,
-                                itemLookup: itemLookup,
+                                itemLookup: eventLookup,
                                 modelContext: modelContext
                             )
                         },
@@ -88,21 +88,21 @@ struct PlannerShellView: View {
                             case .startNow:
                                 viewModel.markStartedNow(
                                     for: block,
-                                    itemLookup: itemLookup,
+                                    itemLookup: eventLookup,
                                     modelContext: modelContext
                                 )
                             case .markDone:
                                 viewModel.setCompletion(
                                     for: block,
                                     isCompleted: true,
-                                    itemLookup: itemLookup,
+                                    itemLookup: eventLookup,
                                     modelContext: modelContext
                                 )
                             case .markUndone:
                                 viewModel.setCompletion(
                                     for: block,
                                     isCompleted: false,
-                                    itemLookup: itemLookup,
+                                    itemLookup: eventLookup,
                                     modelContext: modelContext
                                 )
                             }
@@ -113,7 +113,7 @@ struct PlannerShellView: View {
                     )
                     .toolbar {
                         ToolbarItemGroup(placement: .topBarTrailing) {
-                            Button("Someday", systemImage: "archivebox") {
+                            Button("Archive", systemImage: "archivebox") {
                                 isSomedaySheetPresented = true
                             }
                             .accessibilityIdentifier("now-open-someday")
@@ -133,8 +133,8 @@ struct PlannerShellView: View {
                                         budgetSnapshot: budgetSnapshot
                                     )
                                 },
-                                onAddToSomeday: {
-                                    addSearchTextToSomedayIfNeeded()
+                                onAddToArchive: {
+                                    addSearchTextToArchiveIfNeeded()
                                 }
                             )
                         }
@@ -175,15 +175,11 @@ struct PlannerShellView: View {
         }
         .sheet(isPresented: $isSomedaySheetPresented) {
             NavigationStack {
-                SomedayDrawerContent(items: somedayItems) { item, lane in
-                    viewModel.scheduleJarItem(
-                        item: item,
-                        lane: lane,
-                        modelContext: modelContext
-                    )
+                SomedayDrawerContent(items: archivedEvents) { item, lane in
+                    viewModel.restoreArchivedEvent(item, lane: lane, modelContext: modelContext)
                 }
                 .padding(16)
-                .navigationTitle("Someday")
+                .navigationTitle("Archive")
                 .toolbar {
                     ToolbarItem(placement: .topBarTrailing) {
                         Button("Done") {
@@ -249,8 +245,7 @@ struct PlannerShellView: View {
     ) {
         guard viewModel.todayQuickCapture.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else { return }
         let preferredStartDate = timelineCenterDate.adding(minutes: 5)
-        viewModel.captureQuickItem(
-            from: .today,
+        viewModel.captureQuickEvent(
             modelContext: modelContext,
             template: templateSnapshot,
             defaultDurationMinutes: budgetSnapshot.quickAddDefaultDurationMinutes,
@@ -258,9 +253,9 @@ struct PlannerShellView: View {
         )
     }
 
-    private func addSearchTextToSomedayIfNeeded() {
+    private func addSearchTextToArchiveIfNeeded() {
         guard viewModel.todayQuickCapture.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else { return }
-        viewModel.addQuickItemToSomeday(modelContext: modelContext)
+        viewModel.archiveQuickEvent(modelContext: modelContext)
     }
 }
 
@@ -268,7 +263,7 @@ private struct QuickCaptureToolbarContent: View {
     @Binding var text: String
     let suggestion: IconSuggestion?
     let onAddToToday: () -> Void
-    let onAddToSomeday: () -> Void
+    let onAddToArchive: () -> Void
 
     private var hasText: Bool {
         text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
@@ -292,8 +287,8 @@ private struct QuickCaptureToolbarContent: View {
             .disabled(hasText == false)
             .accessibilityIdentifier("quick-add-today")
 
-            Button("Someday", systemImage: "archivebox") {
-                onAddToSomeday()
+            Button("Archive", systemImage: "archivebox") {
+                onAddToArchive()
             }
             .disabled(hasText == false)
             .accessibilityIdentifier("quick-add-someday")

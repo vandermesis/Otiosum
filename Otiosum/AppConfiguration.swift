@@ -14,7 +14,7 @@ enum AppConfiguration {
     static func makeModelContainer() -> ModelContainer {
         let schema = Schema([
             Item.self,
-            PlannableItem.self,
+            Event.self,
             CalendarLink.self,
             DayTemplate.self,
             DailyBudget.self
@@ -148,9 +148,8 @@ enum AppConfiguration {
         let ideaIcon = IconSuggester.suggest(for: "Idea garden")
 
         context.insert(
-            PlannableItem(
+            Event(
                 title: "Write proposal",
-                kind: .task,
                 source: .local,
                 suggestedIcon: focusIcon.symbolName,
                 tintToken: focusIcon.tintToken,
@@ -160,14 +159,13 @@ enum AppConfiguration {
                 preferredStartMinutes: max(template.wakeUpMinutes + 30, 9 * 60),
                 preferredTimeWindow: .morning,
                 flexibility: .flexible,
-                isInJar: false
+                isArchived: false
             )
         )
 
         context.insert(
-            PlannableItem(
+            Event(
                 title: "Call therapist",
-                kind: .event,
                 source: .local,
                 suggestedIcon: callIcon.symbolName,
                 tintToken: callIcon.tintToken,
@@ -177,14 +175,13 @@ enum AppConfiguration {
                 preferredStartMinutes: 15 * 60,
                 preferredTimeWindow: .afternoon,
                 flexibility: .askBeforeMove,
-                isInJar: false
+                isArchived: false
             )
         )
 
         context.insert(
-            PlannableItem(
+            Event(
                 title: "Relax",
-                kind: .task,
                 source: .local,
                 suggestedIcon: relaxIcon.symbolName,
                 tintToken: relaxIcon.tintToken,
@@ -194,14 +191,13 @@ enum AppConfiguration {
                 preferredStartMinutes: 18 * 60,
                 preferredTimeWindow: .evening,
                 flexibility: .flexible,
-                isInJar: false
+                isArchived: false
             )
         )
 
         context.insert(
-            PlannableItem(
+            Event(
                 title: "Idea garden",
-                kind: .idea,
                 source: .local,
                 suggestedIcon: ideaIcon.symbolName,
                 tintToken: ideaIcon.tintToken,
@@ -211,7 +207,7 @@ enum AppConfiguration {
                 preferredStartMinutes: nil,
                 preferredTimeWindow: .anytime,
                 flexibility: .flexible,
-                isInJar: true
+                isArchived: true
             )
         )
 
@@ -222,9 +218,8 @@ enum AppConfiguration {
             let timelineIcon = IconSuggester.suggest(for: "UI timeline task")
 
             context.insert(
-                PlannableItem(
+                Event(
                     title: "UI Timeline Task",
-                    kind: .task,
                     source: .local,
                     suggestedIcon: timelineIcon.symbolName,
                     tintToken: timelineIcon.tintToken,
@@ -234,7 +229,7 @@ enum AppConfiguration {
                     preferredStartMinutes: roundedMinutes,
                     preferredTimeWindow: .anytime,
                     flexibility: .flexible,
-                    isInJar: false
+                    isArchived: false
                 )
             )
         }
@@ -244,7 +239,7 @@ enum AppConfiguration {
 
     @MainActor
     private static func clearExistingPlannerData(in context: ModelContext) throws {
-        try context.delete(model: PlannableItem.self)
+        try context.delete(model: Event.self)
         try context.delete(model: CalendarLink.self)
     }
 }

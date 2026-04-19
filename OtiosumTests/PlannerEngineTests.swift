@@ -16,10 +16,9 @@ struct PlannerEngineTests {
     func scheduleAvoidsCollisions() throws {
         let day = try makeDate(year: 2026, month: 4, day: 20, hour: 0, minute: 0)
         let items = [
-            PlannerItemSnapshot(
+            EventSnapshot(
                 id: UUID(),
                 title: "Write",
-                kind: .task,
                 source: .local,
                 suggestedIcon: "laptopcomputer",
                 tintToken: "teal",
@@ -34,13 +33,12 @@ struct PlannerEngineTests {
                 notes: "",
                 isCompleted: false,
                 orderHint: 1,
-                isInJar: false,
+                isArchived: false,
                 forceAfterBedtime: false
             ),
-            PlannerItemSnapshot(
+            EventSnapshot(
                 id: UUID(),
                 title: "Reply",
-                kind: .task,
                 source: .local,
                 suggestedIcon: "envelope",
                 tintToken: "sky",
@@ -55,7 +53,7 @@ struct PlannerEngineTests {
                 notes: "",
                 isCompleted: false,
                 orderHint: 2,
-                isInJar: false,
+                isArchived: false,
                 forceAfterBedtime: false
             )
         ]
@@ -83,10 +81,9 @@ struct PlannerEngineTests {
         let trailingItemID = UUID()
 
         let items = [
-            PlannerItemSnapshot(
+            EventSnapshot(
                 id: activeItemID,
                 title: "Deep focus",
-                kind: .task,
                 source: .local,
                 suggestedIcon: "laptopcomputer",
                 tintToken: "teal",
@@ -101,13 +98,12 @@ struct PlannerEngineTests {
                 notes: "",
                 isCompleted: false,
                 orderHint: 1,
-                isInJar: false,
+                isArchived: false,
                 forceAfterBedtime: false
             ),
-            PlannerItemSnapshot(
+            EventSnapshot(
                 id: trailingItemID,
                 title: "Inbox",
-                kind: .task,
                 source: .local,
                 suggestedIcon: "tray.full",
                 tintToken: "mint",
@@ -122,7 +118,7 @@ struct PlannerEngineTests {
                 notes: "",
                 isCompleted: false,
                 orderHint: 2,
-                isInJar: false,
+                isArchived: false,
                 forceAfterBedtime: false
             )
         ]
@@ -170,10 +166,9 @@ struct PlannerEngineTests {
     @Test("Planner warns when a new item would cut into bedtime")
     func bedtimeOverflowProducesWarning() throws {
         let day = try makeDate(year: 2026, month: 4, day: 20, hour: 0, minute: 0)
-        let lateItem = PlannerItemSnapshot(
+        let lateItem = EventSnapshot(
             id: UUID(),
             title: "Late task",
-            kind: .task,
             source: .local,
             suggestedIcon: "moon.stars",
             tintToken: "indigo",
@@ -188,7 +183,7 @@ struct PlannerEngineTests {
             notes: "",
             isCompleted: false,
             orderHint: 1,
-            isInJar: false,
+            isArchived: false,
             forceAfterBedtime: false
         )
 
@@ -211,7 +206,7 @@ struct PlannerEngineTests {
     func quickCaptureDefaults() throws {
         let schema = Schema([
             Item.self,
-            PlannableItem.self,
+            Event.self,
             CalendarLink.self,
             DayTemplate.self,
             DailyBudget.self
@@ -223,19 +218,18 @@ struct PlannerEngineTests {
         try store.ensureSeedData(in: context)
         store.todayQuickCapture = "walk"
 
-        store.captureQuickItem(
-            from: .today,
+        store.captureQuickEvent(
             modelContext: context,
             day: PlannerEngineTests.calendar.startOfDay(for: .now),
             template: .default
         )
 
-        let items = try context.fetch(FetchDescriptor<PlannableItem>())
+        let items = try context.fetch(FetchDescriptor<Event>())
         let captured = try #require(items.first)
 
         #expect(captured.title == "Walk")
         #expect(captured.targetDurationMinutes == 30)
-        #expect(captured.isInJar == false)
+        #expect(captured.isArchived == false)
         #expect(captured.scheduledDay != nil)
     }
 
