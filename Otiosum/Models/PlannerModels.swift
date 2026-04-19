@@ -253,6 +253,7 @@ final class DailyBudget {
     var maxFocusItems: Int
     var mealDurationMinutes: Int
     var workoutTargetMinutes: Int
+    var quickAddDefaultDurationMinutes: Int
     var lowNotificationMode: Bool
     var useSimplifiedMode: Bool
 
@@ -265,6 +266,7 @@ final class DailyBudget {
         maxFocusItems: Int = DailyBudgetSnapshot.default.maxFocusItems,
         mealDurationMinutes: Int = DailyBudgetSnapshot.default.mealDurationMinutes,
         workoutTargetMinutes: Int = DailyBudgetSnapshot.default.workoutTargetMinutes,
+        quickAddDefaultDurationMinutes: Int = DailyBudgetSnapshot.default.quickAddDefaultDurationMinutes,
         lowNotificationMode: Bool = DailyBudgetSnapshot.default.lowNotificationMode,
         useSimplifiedMode: Bool = DailyBudgetSnapshot.default.useSimplifiedMode
     ) {
@@ -276,6 +278,7 @@ final class DailyBudget {
         self.maxFocusItems = maxFocusItems
         self.mealDurationMinutes = mealDurationMinutes
         self.workoutTargetMinutes = workoutTargetMinutes
+        self.quickAddDefaultDurationMinutes = quickAddDefaultDurationMinutes
         self.lowNotificationMode = lowNotificationMode
         self.useSimplifiedMode = useSimplifiedMode
     }
@@ -288,6 +291,7 @@ final class DailyBudget {
             maxFocusItems: maxFocusItems,
             mealDurationMinutes: mealDurationMinutes,
             workoutTargetMinutes: workoutTargetMinutes,
+            quickAddDefaultDurationMinutes: quickAddDefaultDurationMinutes,
             lowNotificationMode: lowNotificationMode,
             useSimplifiedMode: useSimplifiedMode
         )

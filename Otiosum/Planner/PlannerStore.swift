@@ -8,9 +8,7 @@ final class PlannerStore {
     var selectedTab: PlannerTab = .today
     var selectedDay: Date = .now
     var todayQuickCapture: String = ""
-    var todayQuickStartMinutes: Int?
     var jarQuickCapture: String = ""
-    var timelineDraft: TimelineDraftTask?
     var pendingOverflow: PendingOverflowState?
     var pendingCalendarShift: PendingCalendarShiftState?
     var lastUserInteraction: Date?
@@ -51,7 +49,9 @@ final class PlannerStore {
         from context: QuickCaptureContext,
         modelContext: ModelContext,
         day: Date,
-        template: DayTemplateSnapshot
+        template: DayTemplateSnapshot,
+        defaultDurationMinutes: Int = 30,
+        preferredStartDate: Date? = nil
     ) {
         let rawTitle: String
         switch context {
@@ -65,21 +65,28 @@ final class PlannerStore {
         guard title.isEmpty == false else { return }
 
         let icon = IconSuggester.suggest(for: title)
-        let preferredStartMinutes = context == .today
-            ? (todayQuickStartMinutes ?? roundedStartMinutes(template: template))
-            : nil
+        let resolvedPreferredStartMinutes: Int?
+        if context == .today {
+            if let preferredStartDate {
+                resolvedPreferredStartMinutes = max(0, min(23 * 60 + 55, preferredStartDate.minutesSinceStartOfDay(using: .current)))
+            } else {
+                resolvedPreferredStartMinutes = roundedStartMinutes(template: template)
+            }
+        } else {
+            resolvedPreferredStartMinutes = nil
+        }
         let item = PlannableItem(
             title: title.capitalizedSentence,
             kind: title.lowercased().contains("idea") ? .idea : .task,
             source: .local,
             suggestedIcon: icon.symbolName,
             tintToken: icon.tintToken,
-            targetDurationMinutes: 30,
+            targetDurationMinutes: max(15, defaultDurationMinutes),
             minimumDurationMinutes: 15,
             scheduledDay: context == .today ? day : nil,
-            preferredStartMinutes: preferredStartMinutes,
+            preferredStartMinutes: resolvedPreferredStartMinutes,
             preferredTimeWindow: context == .today
-                ? inferredWindow(for: day, startMinutes: preferredStartMinutes ?? 0)
+                ? inferredWindow(for: day, startMinutes: resolvedPreferredStartMinutes ?? 0)
                 : .anytime,
             flexibility: .flexible,
             notes: "",
@@ -110,84 +117,6 @@ final class PlannerStore {
         item.preferredStartMinutes = lane.timeWindow.startMinutes
         item.forceAfterBedtime = false
         try? modelContext.save()
-    }
-
-    func beginTimelineDraft(
-        fromQuickAdd context: QuickCaptureContext,
-        on day: Date,
-        template: DayTemplateSnapshot
-    ) {
-        let rawTitle: String
-        switch context {
-        case .today:
-            rawTitle = todayQuickCapture
-        case .jar:
-            rawTitle = jarQuickCapture
-        }
-
-        let title = rawTitle.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard title.isEmpty == false else { return }
-
-        let icon = IconSuggester.suggest(for: title)
-        let dayStart = Calendar.current.startOfDay(for: day)
-        _ = template
-        let nowMinutes = Date.now.minutesSinceStartOfDay(using: .current)
-        let startMinutes = ((nowMinutes + 2) / 5) * 5
-        let startDate = Calendar.current.date(on: dayStart, minutesFromStartOfDay: startMinutes)
-
-        timelineDraft = TimelineDraftTask(
-            sourceContext: context,
-            title: title.capitalizedSentence,
-            kind: title.lowercased().contains("idea") ? .idea : .task,
-            symbolName: icon.symbolName,
-            tintToken: icon.tintToken,
-            startDate: startDate
-        )
-    }
-
-    func updateTimelineDraftStart(_ start: Date) {
-        guard timelineDraft != nil else { return }
-        timelineDraft?.startDate = start
-    }
-
-    func cancelTimelineDraft() {
-        timelineDraft = nil
-    }
-
-    func confirmTimelineDraft(modelContext: ModelContext) {
-        guard let draft = timelineDraft else { return }
-        let calendar = Calendar.current
-        let scheduledDay = calendar.startOfDay(for: draft.startDate)
-        let preferredStartMinutes = max(0, min(23 * 60 + 55, draft.startDate.minutesSinceStartOfDay(using: calendar)))
-
-        let item = PlannableItem(
-            title: draft.title,
-            kind: draft.kind,
-            source: .local,
-            suggestedIcon: draft.symbolName,
-            tintToken: draft.tintToken,
-            targetDurationMinutes: 30,
-            minimumDurationMinutes: 15,
-            scheduledDay: scheduledDay,
-            preferredStartMinutes: preferredStartMinutes,
-            preferredTimeWindow: inferredWindow(for: draft.startDate),
-            flexibility: .flexible,
-            notes: "",
-            isCompleted: false,
-            isInJar: false
-        )
-
-        modelContext.insert(item)
-        try? modelContext.save()
-
-        switch draft.sourceContext {
-        case .today:
-            todayQuickCapture = ""
-        case .jar:
-            jarQuickCapture = ""
-        }
-
-        timelineDraft = nil
     }
 
     func addQuickItemToSomeday(modelContext: ModelContext) {

@@ -148,14 +148,15 @@ struct PlannerStoreTests {
         try store.ensureSeedData(in: modelContext)
 
         let day = Date(timeIntervalSinceReferenceDate: 120_000)
+        let preferredStart = day.addingTimeInterval(TimeInterval((14 * 60 + 30) * 60))
         store.todayQuickCapture = "plan sprint"
-        store.todayQuickStartMinutes = 14 * 60 + 30
 
         store.captureQuickItem(
             from: .today,
             modelContext: modelContext,
             day: day,
-            template: .default
+            template: .default,
+            preferredStartDate: preferredStart
         )
 
         let items = try modelContext.fetch(FetchDescriptor<PlannableItem>())
@@ -217,42 +218,30 @@ struct PlannerStoreTests {
         #expect(item.isInJar == false)
     }
 
-    @Test("Beginning timeline draft from quick add does not persist item")
-    func beginTimelineDraftDoesNotPersist() throws {
-        let modelContext = try makeModelContext()
-        let store = PlannerStore()
-        try store.ensureSeedData(in: modelContext)
-
-        store.todayQuickCapture = "plan launch"
-        let day = Date(timeIntervalSinceReferenceDate: 150_000)
-        store.beginTimelineDraft(fromQuickAdd: .today, on: day, template: .default)
-
-        let items = try modelContext.fetch(FetchDescriptor<PlannableItem>())
-        #expect(items.isEmpty)
-        #expect(store.timelineDraft != nil)
-        #expect(store.timelineDraft?.title == "Plan launch")
-    }
-
-    @Test("Confirming timeline draft persists item at chosen start")
-    func confirmTimelineDraftPersistsItem() throws {
+    @Test("Quick add from Today uses provided timeline anchor and configured default duration")
+    func captureQuickItemFromTodayUsesAnchorAndDuration() throws {
         let modelContext = try makeModelContext()
         let store = PlannerStore()
         try store.ensureSeedData(in: modelContext)
 
         let day = Date(timeIntervalSinceReferenceDate: 160_000)
+        let anchor = day.addingTimeInterval(14 * 60 * 60)
         store.todayQuickCapture = "focus block"
-        store.beginTimelineDraft(fromQuickAdd: .today, on: day, template: .default)
-        let start = day.addingTimeInterval(14 * 60 * 60)
-        store.updateTimelineDraftStart(start)
-
-        store.confirmTimelineDraft(modelContext: modelContext)
+        store.captureQuickItem(
+            from: .today,
+            modelContext: modelContext,
+            day: day,
+            template: .default,
+            defaultDurationMinutes: 45,
+            preferredStartDate: anchor
+        )
 
         let items = try modelContext.fetch(FetchDescriptor<PlannableItem>())
         let item = try #require(items.first)
         #expect(item.title == "Focus block")
-        #expect(item.scheduledDay == Calendar.current.startOfDay(for: start))
-        #expect(item.preferredStartMinutes == start.minutesSinceStartOfDay(using: .current))
-        #expect(store.timelineDraft == nil)
+        #expect(item.scheduledDay == Calendar.current.startOfDay(for: anchor))
+        #expect(item.preferredStartMinutes == anchor.minutesSinceStartOfDay(using: .current))
+        #expect(item.targetDurationMinutes == 45)
         #expect(store.todayQuickCapture.isEmpty)
     }
 

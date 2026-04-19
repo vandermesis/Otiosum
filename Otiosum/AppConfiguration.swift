@@ -20,23 +20,100 @@ enum AppConfiguration {
             DailyBudget.self
         ])
 
-        let configuration = ModelConfiguration(
-            schema: schema,
-            isStoredInMemoryOnly: isUITesting
-        )
+        if isUITesting {
+            let inMemoryConfiguration = ModelConfiguration(
+                schema: schema,
+                isStoredInMemoryOnly: true
+            )
+
+            do {
+                return try makeSeededContainer(
+                    schema: schema,
+                    configuration: inMemoryConfiguration,
+                    seedUITestDataIfNeeded: true
+                )
+            } catch {
+                fatalError("Could not create UI test ModelContainer: \(error)")
+            }
+        }
 
         do {
-            let container = try ModelContainer(for: schema, configurations: [configuration])
-            let context = ModelContext(container)
-            try seedDefaultsIfNeeded(in: context)
+            let storeURL = try persistentStoreURL()
+            let persistentConfiguration = ModelConfiguration(
+                "OtiosumStore",
+                schema: schema,
+                url: storeURL
+            )
 
-            if isUITesting {
-                try seedUITestData(in: context)
+            do {
+                return try makeSeededContainer(
+                    schema: schema,
+                    configuration: persistentConfiguration,
+                    seedUITestDataIfNeeded: false
+                )
+            } catch {
+                try resetPersistentStore(at: storeURL)
+                return try makeSeededContainer(
+                    schema: schema,
+                    configuration: persistentConfiguration,
+                    seedUITestDataIfNeeded: false
+                )
             }
-
-            return container
         } catch {
-            fatalError("Could not create ModelContainer: \(error)")
+            // Last-resort fallback keeps app launch resilient if persistent recovery failed.
+            let fallbackConfiguration = ModelConfiguration(
+                schema: schema,
+                isStoredInMemoryOnly: true
+            )
+
+            do {
+                return try makeSeededContainer(
+                    schema: schema,
+                    configuration: fallbackConfiguration,
+                    seedUITestDataIfNeeded: false
+                )
+            } catch {
+                fatalError("Could not create fallback ModelContainer: \(error)")
+            }
+        }
+    }
+
+    @MainActor
+    private static func makeSeededContainer(
+        schema: Schema,
+        configuration: ModelConfiguration,
+        seedUITestDataIfNeeded: Bool
+    ) throws -> ModelContainer {
+        let container = try ModelContainer(for: schema, configurations: [configuration])
+        let context = ModelContext(container)
+        try seedDefaultsIfNeeded(in: context)
+
+        if seedUITestDataIfNeeded {
+            try seedUITestData(in: context)
+        }
+
+        return container
+    }
+
+    private static func persistentStoreURL() throws -> URL {
+        let directory = URL.applicationSupportDirectory
+        try FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true
+        )
+        return directory.appending(path: "Otiosum.store")
+    }
+
+    private static func resetPersistentStore(at storeURL: URL) throws {
+        let fileManager = FileManager.default
+        let companionURLs = [
+            storeURL,
+            URL(fileURLWithPath: storeURL.path() + "-shm"),
+            URL(fileURLWithPath: storeURL.path() + "-wal")
+        ]
+
+        for url in companionURLs where fileManager.fileExists(atPath: url.path()) {
+            try fileManager.removeItem(at: url)
         }
     }
 

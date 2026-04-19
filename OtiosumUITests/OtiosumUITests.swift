@@ -9,7 +9,7 @@ final class OtiosumUITests: XCTestCase {
     func testQuickAddKeepsKeyboardActiveForMultipleLetters() throws {
         let app = launchApp()
 
-        let quickField = app.textFields["Quick add"]
+        let quickField = app.searchFields["Add"]
         XCTAssertTrue(quickField.waitForExistence(timeout: 2))
 
         quickField.tap()
@@ -21,34 +21,42 @@ final class OtiosumUITests: XCTestCase {
     }
 
     @MainActor
-    func testAddToTimelineShowsPlacementMode() throws {
+    func testAddToTimelineWithEnterClearsInput() throws {
         let app = launchApp()
 
-        let quickField = app.textFields["Quick add"]
+        let quickField = app.searchFields["Add"]
         XCTAssertTrue(quickField.waitForExistence(timeout: 2))
         quickField.tap()
         quickField.typeText("focus sprint\n")
 
-        XCTAssertTrue(app.buttons["timeline-draft-confirm"].waitForExistence(timeout: 3))
+        let value = quickField.value as? String
+        XCTAssertTrue(value == nil || value == "" || value == "Add")
     }
 
     @MainActor
-    func testQuickAddToSomedayClearsInputAndDoesNotEnterPlacementMode() throws {
+    func testQuickAddToSomedayClearsInput() throws {
         let app = launchApp()
 
-        let quickField = app.textFields["Quick add"]
+        let quickField = app.searchFields["Add"]
         XCTAssertTrue(quickField.waitForExistence(timeout: 2))
         quickField.tap()
         quickField.typeText("someday writing")
-
-        if app.keyboards.firstMatch.exists {
-            app.navigationBars.firstMatch.tap()
+        let cancelButton = app.buttons.matching(NSPredicate(format: "label ==[c] %@", "Cancel")).firstMatch
+        let closeButton = app.buttons.matching(NSPredicate(format: "label ==[c] %@", "Close")).firstMatch
+        let closeKey = app.keys.matching(NSPredicate(format: "label ==[c] %@", "Close")).firstMatch
+        if cancelButton.exists {
+            cancelButton.tap()
+        } else if closeButton.exists {
+            closeButton.tap()
+        } else {
+            closeKey.tap()
         }
-        app.buttons["now-someday-sheet-button"].tap()
-
-        XCTAssertFalse(app.buttons["timeline-draft-confirm"].exists)
-        let value = quickField.value as? String
-        XCTAssertTrue(value == nil || value == "" || value == "Quick add")
+        let clearedPredicate = NSPredicate { _, _ in
+            let value = quickField.value as? String
+            return value == nil || value == "" || value == "Add"
+        }
+        let expectation = expectation(for: clearedPredicate, evaluatedWith: quickField)
+        wait(for: [expectation], timeout: 2)
     }
 
     @MainActor

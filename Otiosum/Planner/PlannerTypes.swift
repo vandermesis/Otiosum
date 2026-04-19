@@ -286,6 +286,7 @@ struct DailyBudgetSnapshot: Equatable, Sendable {
     let maxFocusItems: Int
     let mealDurationMinutes: Int
     let workoutTargetMinutes: Int
+    let quickAddDefaultDurationMinutes: Int
     let lowNotificationMode: Bool
     let useSimplifiedMode: Bool
 
@@ -296,6 +297,7 @@ struct DailyBudgetSnapshot: Equatable, Sendable {
         maxFocusItems: 5,
         mealDurationMinutes: 40,
         workoutTargetMinutes: 45,
+        quickAddDefaultDurationMinutes: 30,
         lowNotificationMode: true,
         useSimplifiedMode: false
     )
@@ -386,14 +388,6 @@ struct InferenceAssessment: Equatable, Sendable {
     let confidence: Double
 }
 
-struct TimelineDraftTask: Equatable, Sendable {
-    let sourceContext: QuickCaptureContext
-    let title: String
-    let kind: PlannerItemKind
-    let symbolName: String
-    let tintToken: String
-    var startDate: Date
-}
 
 extension Date {
     func startOfDay(using calendar: Calendar) -> Date {

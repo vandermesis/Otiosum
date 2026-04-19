@@ -6,13 +6,12 @@ struct TodayScreen: View {
     let plan: DayPlan
     let budget: DailyBudgetSnapshot
     let calendarService: SystemCalendarService
-    let timelineDraft: TimelineDraftTask?
     let onRequestCalendarAccess: () -> Void
     let onDropSomedayItem: (UUID, Date) -> Bool
     let onRescheduleBlock: (PlannedBlock, Date) -> Void
     let onAdjustBlockDuration: (PlannedBlock, Int) -> Void
     let onQuickAction: (PlannedBlock, TimelineQuickAction) -> Void
-    let onTimelineDraftMoved: (Date) -> Void
+    let onCenterDateChanged: (Date) -> Void
 
     var body: some View {
         ZStack {
@@ -32,12 +31,11 @@ struct TodayScreen: View {
                 NowTimelineSection(
                     day: day,
                     plan: plan,
-                    timelineDraft: timelineDraft,
                     onDropSomedayItem: onDropSomedayItem,
                     onRescheduleBlock: onRescheduleBlock,
                     onAdjustBlockDuration: onAdjustBlockDuration,
                     onQuickAction: onQuickAction,
-                    onTimelineDraftMoved: onTimelineDraftMoved
+                    onCenterDateChanged: onCenterDateChanged
                 )
                 .padding(.horizontal, 18)
             }
@@ -48,12 +46,11 @@ struct TodayScreen: View {
 private struct NowTimelineSection: View {
     let day: Date
     let plan: DayPlan
-    let timelineDraft: TimelineDraftTask?
     let onDropSomedayItem: (UUID, Date) -> Bool
     let onRescheduleBlock: (PlannedBlock, Date) -> Void
     let onAdjustBlockDuration: (PlannedBlock, Int) -> Void
     let onQuickAction: (PlannedBlock, TimelineQuickAction) -> Void
-    let onTimelineDraftMoved: (Date) -> Void
+    let onCenterDateChanged: (Date) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -64,12 +61,11 @@ private struct NowTimelineSection: View {
                 currentBlockID: plan.nowBlock?.id,
                 nextBlockID: plan.nextBlock?.id,
                 showsHeader: false,
-                timelineDraft: timelineDraft,
                 onDropSomedayItem: onDropSomedayItem,
                 onRescheduleBlock: onRescheduleBlock,
                 onAdjustBlockDuration: onAdjustBlockDuration,
                 onQuickAction: onQuickAction,
-                onTimelineDraftMoved: onTimelineDraftMoved
+                onCenterDateChanged: onCenterDateChanged
             )
             .frame(minHeight: 620)
             .clipShape(.rect(cornerRadius: 24))

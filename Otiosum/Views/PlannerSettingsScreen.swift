@@ -30,6 +30,7 @@ struct SettingsScreen: View {
                     Stepper("Minimum sleep hours: \(budget.minimumSleepHours.formatted(.number.precision(.fractionLength(0...1))))", value: $budget.minimumSleepHours, in: 6...10, step: 0.5)
                     Stepper("Work target minutes: \(budget.targetWorkMinutes)", value: $budget.targetWorkMinutes, in: 120...600, step: 15)
                     Stepper("Focus items per day: \(budget.maxFocusItems)", value: $budget.maxFocusItems, in: 2...10)
+                    Stepper("Quick Add duration: \(budget.quickAddDefaultDurationMinutes)m", value: $budget.quickAddDefaultDurationMinutes, in: 15...180, step: 5)
                     Toggle("Low-notification mode", isOn: $budget.lowNotificationMode)
                     Toggle("Simplified presentation", isOn: $budget.useSimplifiedMode)
                 }

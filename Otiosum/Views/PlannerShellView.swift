@@ -13,6 +13,8 @@ struct PlannerShellView: View {
     @State private var viewModel = PlannerShellViewModel()
     @State private var isSomedaySheetPresented = false
     @State private var isSettingsPresented = false
+    @State private var timelineCenterDate = Date.now
+    @State private var isSearchPresented = false
 
     private var template: DayTemplate? { templates.first }
     private var budget: DailyBudget? { budgets.first }
@@ -52,7 +54,6 @@ struct PlannerShellView: View {
                         plan: selectedDayPlan,
                         budget: budgetSnapshot,
                         calendarService: viewModel.calendarService,
-                        timelineDraft: viewModel.timelineDraft,
                         onRequestCalendarAccess: {
                             Task {
                                 await viewModel.requestCalendarAccess()
@@ -103,8 +104,8 @@ struct PlannerShellView: View {
                                 )
                             }
                         },
-                        onTimelineDraftMoved: { start in
-                            viewModel.updateTimelineDraftStart(start)
+                        onCenterDateChanged: { centerDate in
+                            timelineCenterDate = centerDate
                         }
                     )
                     .toolbar {
@@ -119,25 +120,30 @@ struct PlannerShellView: View {
                             }
                             .accessibilityIdentifier("now-open-settings")
                         }
+                        ToolbarItemGroup(placement: .bottomBar) {
+                            TextField("", text: todayQuickCaptureBinding)
+
+                            Button("Someday", systemImage: "archivebox") {
+
+                            }
+                        }
+
+
+//                        DefaultToolbarItem(kind: .search, placement: .bottomBar)
                     }
                 }
-                .safeAreaInset(edge: .bottom) {
-                    NowQuickAddComposer(
-                        quickCapture: todayQuickCaptureBinding,
-                        isDraftingTimeline: viewModel.timelineDraft != nil,
-                        onAddToTimeline: {
-                            viewModel.beginTimelineDraft(from: .today, template: templateSnapshot)
-                        },
-                        onAddToSomeday: {
-                            viewModel.addQuickItemToSomeday(modelContext: modelContext)
-                        },
-                        onConfirmDraft: {
-                            viewModel.confirmTimelineDraft(modelContext: modelContext)
-                        },
-                        onCancelDraft: {
-                            viewModel.cancelTimelineDraft()
-                        }
-                    )
+                .searchable(
+                    text: todayQuickCaptureBinding,
+                    isPresented: $isSearchPresented,
+                    placement: .toolbar,
+                    prompt: "Add"
+                )
+                .onSubmit(of: .search) {
+                    addSearchTextToTimeline(templateSnapshot: templateSnapshot, budgetSnapshot: budgetSnapshot)
+                }
+                .onChange(of: isSearchPresented) { wasPresented, isPresented in
+                    guard wasPresented, isPresented == false else { return }
+                    addSearchTextToSomedayIfNeeded()
                 }
             }
         }
@@ -241,92 +247,24 @@ struct PlannerShellView: View {
             set: { viewModel.pendingCalendarShift = $0 }
         )
     }
-}
 
-private struct NowQuickAddComposer: View {
-    @Binding var quickCapture: String
-    let isDraftingTimeline: Bool
-    let onAddToTimeline: () -> Void
-    let onAddToSomeday: () -> Void
-    let onConfirmDraft: () -> Void
-    let onCancelDraft: () -> Void
+    private func addSearchTextToTimeline(
+        templateSnapshot: DayTemplateSnapshot,
+        budgetSnapshot: DailyBudgetSnapshot
+    ) {
+        guard viewModel.todayQuickCapture.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else { return }
+        let preferredStartDate = timelineCenterDate.adding(minutes: 5)
+        viewModel.captureQuickItem(
+            from: .today,
+            modelContext: modelContext,
+            template: templateSnapshot,
+            defaultDurationMinutes: budgetSnapshot.quickAddDefaultDurationMinutes,
+            preferredStartDate: preferredStartDate
+        )
+    }
 
-    @FocusState private var isTextFieldFocused: Bool
-
-    var body: some View {
-        HStack(spacing: 10) {
-            TextField("Quick add", text: $quickCapture)
-                .textFieldStyle(.roundedBorder)
-                .submitLabel(.done)
-                .focused($isTextFieldFocused)
-                .onSubmit {
-                    if isDraftingTimeline {
-                        onConfirmDraft()
-                    } else {
-                        onAddToTimeline()
-                    }
-                }
-                .accessibilityIdentifier("now-quick-add-field")
-                .frame(maxWidth: .infinity)
-
-            if isDraftingTimeline {
-                Button {
-                    isTextFieldFocused = false
-                    onCancelDraft()
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.footnote.bold())
-                }
-                .buttonStyle(.bordered)
-                .clipShape(.circle)
-                .accessibilityIdentifier("timeline-draft-cancel")
-                .accessibilityLabel("Cancel placement")
-
-                Button {
-                    isTextFieldFocused = false
-                    onConfirmDraft()
-                } label: {
-                    Image(systemName: "checkmark")
-                        .font(.footnote.bold())
-                }
-                .buttonStyle(.borderedProminent)
-                .clipShape(.circle)
-                .accessibilityIdentifier("timeline-draft-confirm")
-                .accessibilityLabel("Place task")
-            } else {
-                Button {
-                    isTextFieldFocused = false
-                    onAddToTimeline()
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.footnote.bold())
-                }
-                .buttonStyle(.borderedProminent)
-                .clipShape(.circle)
-                .accessibilityIdentifier("now-quick-add-button")
-                .accessibilityLabel("Add to timeline")
-
-                Button {
-                    isTextFieldFocused = false
-                    onAddToSomeday()
-                } label: {
-                    Image(systemName: "archivebox")
-                        .font(.footnote)
-                }
-                .buttonStyle(.bordered)
-                .clipShape(.circle)
-                .accessibilityIdentifier("now-someday-sheet-button")
-                .accessibilityLabel("Save to someday")
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .background(.ultraThinMaterial)
-        .overlay(alignment: .top) {
-            Divider()
-        }
-        .onAppear {
-            isTextFieldFocused = true
-        }
+    private func addSearchTextToSomedayIfNeeded() {
+        guard viewModel.todayQuickCapture.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else { return }
+        viewModel.addQuickItemToSomeday(modelContext: modelContext)
     }
 }
