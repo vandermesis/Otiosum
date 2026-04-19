@@ -15,6 +15,7 @@ final class PlannerStore {
     let calendarService = SystemCalendarService()
 
     func ensureSeedData(in modelContext: ModelContext) throws {
+        try IconCatalogDatabase.prepareIfNeeded(in: modelContext)
         guard didSeedDefaults == false else { return }
 
         let templates = try modelContext.fetch(FetchDescriptor<DayTemplate>())

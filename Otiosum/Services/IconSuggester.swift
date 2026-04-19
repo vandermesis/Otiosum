@@ -1,4 +1,5 @@
 import Foundation
+import NaturalLanguage
 
 enum IconSuggester {
     static func suggest(for title: String) -> IconSuggestion {
@@ -16,37 +17,46 @@ enum IconSuggester {
             return [fallback]
         }
 
-        let rankedMatches: [RankedIconSuggestion] = catalog.compactMap { entry -> RankedIconSuggestion? in
+        let candidates = IconCatalogDatabase.curatedEntries + IconCatalogDatabase.generatedCandidates(matching: query.tokens)
+
+        let rankedMatches = candidates
+            .compactMap { entry -> RankedIconSuggestion? in
                 let score = score(entry, query: query)
                 guard score > 0 else { return nil }
                 return RankedIconSuggestion(score: score, suggestion: entry.iconSuggestion)
             }
             .sorted()
 
-        let rankedSuggestions = rankedMatches.reduce(into: [IconSuggestion]()) { suggestions, ranked in
-                guard suggestions.contains(ranked.suggestion) == false else { return }
-                suggestions.append(ranked.suggestion)
-            }
+        let suggestions = rankedMatches.reduce(into: [IconSuggestion]()) { results, ranked in
+            guard results.contains(ranked.suggestion) == false else { return }
+            results.append(ranked.suggestion)
+        }
 
-        if rankedSuggestions.isEmpty {
+        guard suggestions.isEmpty == false else {
             return [fallback]
         }
 
-        var limitedSuggestions = Array(rankedSuggestions.prefix(resolvedLimit))
-        if limitedSuggestions.count < resolvedLimit, limitedSuggestions.contains(fallback) == false {
-            limitedSuggestions.append(fallback)
+        var limited = Array(suggestions.prefix(resolvedLimit))
+        if limited.count < resolvedLimit, limited.contains(fallback) == false {
+            limited.append(fallback)
         }
 
-        return limitedSuggestions
+        return limited
     }
 
     private static let fallback = IconSuggestion(symbolName: "calendar", tintToken: "sky", emoji: "🗓️")
+    private static let wordEmbedding = NLEmbedding.wordEmbedding(for: .english)
 
     private static func score(_ entry: IconCatalogEntry, query: NormalizedQuery) -> Int {
-        let termScores = entry.searchTerms.map { score($0, query: query) }
-        let bestTermScore = termScores.max() ?? 0
-        guard bestTermScore > 0 else { return 0 }
-        return bestTermScore
+        let lexicalScore = entry.searchTerms
+            .map(NormalizedTerm.init)
+            .map { score($0, query: query) }
+            .max() ?? 0
+
+        let semanticScore = semanticScore(for: entry, query: query)
+
+        guard lexicalScore > 0 || semanticScore > 0 else { return 0 }
+        return max(lexicalScore, semanticScore) + entry.priority
     }
 
     private static func score(_ term: NormalizedTerm, query: NormalizedQuery) -> Int {
@@ -56,10 +66,6 @@ enum IconSuggester {
 
         if query.tokens == term.tokens {
             return 120
-        }
-
-        if query.normalizedText.localizedStandardContains(term.text) {
-            return 105
         }
 
         if query.tokens.contains(where: { $0 == term.text }) {
@@ -74,89 +80,92 @@ enum IconSuggester {
             return 74
         }
 
-        if query.tokens.contains(where: { $0.hasPrefix(term.text) || term.text.hasPrefix($0) }) {
-            return 58
+        if query.tokens.contains(where: { token in
+            hasMorphologicalMatch(token: token, term: term.text)
+        }) {
+            return 68
         }
 
-        if query.normalizedText.localizedStandardContains(term.text.replacing(" ", with: "")) {
-            return 44
+        if term.text.count >= 4, query.tokens.contains(where: { token in
+            token.count >= 4 && (token.hasPrefix(term.text) || term.text.hasPrefix(token))
+        }) {
+            return 58
         }
 
         return 0
     }
 
-    private static let catalog: [IconCatalogEntry] = [
-        IconCatalogEntry(
-            symbolName: "bed.double.fill",
-            tintToken: "indigo",
-            emoji: "🛏️",
-            terms: ["sleep", "bed", "nap", "rest early", "go to bed"],
-            synonyms: ["bedtime", "sleeping", "power nap"]
-        ),
-        IconCatalogEntry(
-            symbolName: "fork.knife",
-            tintToken: "peach",
-            emoji: "🍽️",
-            terms: ["eat", "meal", "lunch", "breakfast", "dinner", "food"],
-            synonyms: ["snack", "brunch", "supper", "cook", "groceries"]
-        ),
-        IconCatalogEntry(
-            symbolName: "sofa.fill",
-            tintToken: "sand",
-            emoji: "🛋️",
-            terms: ["rest", "relax", "quiet", "pause", "recover"],
-            synonyms: ["reset", "unwind", "downtime", "break"]
-        ),
-        IconCatalogEntry(
-            symbolName: "figure.walk",
-            tintToken: "lime",
-            emoji: "🏃",
-            terms: ["walk", "run", "gym", "workout", "exercise"],
-            synonyms: ["stretch", "fitness", "jog", "movement", "cardio"]
-        ),
-        IconCatalogEntry(
-            symbolName: "person.crop.circle.badge.clock",
-            tintToken: "sky",
-            emoji: "📅",
-            terms: ["call", "meeting", "doctor", "therapy", "appointment"],
-            synonyms: ["checkup", "session", "consultation", "visit", "interview"]
-        ),
-        IconCatalogEntry(
-            symbolName: "sparkles",
-            tintToken: "amber",
-            emoji: "💡",
-            terms: ["idea", "brainstorm", "think", "plan"],
-            synonyms: ["concept", "outline", "draft", "vision", "notes"]
-        ),
-        IconCatalogEntry(
-            symbolName: "star.fill",
-            tintToken: "violet",
-            emoji: "✨",
-            terms: ["music", "read", "book", "movie", "play"],
-            synonyms: ["podcast", "game", "watch", "listen", "creative"]
-        ),
-        IconCatalogEntry(
-            symbolName: "house.fill",
-            tintToken: "sage",
-            emoji: "🏠",
-            terms: ["home", "clean", "laundry", "dish"],
-            synonyms: ["tidy", "chores", "kitchen", "vacuum", "organize"]
-        ),
-        IconCatalogEntry(
-            symbolName: "laptopcomputer",
-            tintToken: "teal",
-            emoji: "💻",
-            terms: ["code", "write", "focus", "work", "email"],
-            synonyms: ["deep work", "project", "review", "study", "admin"]
-        ),
-        IconCatalogEntry(
-            symbolName: "cart.fill",
-            tintToken: "mint",
-            emoji: "🛒",
-            terms: ["shop", "store", "buy", "pickup"],
-            synonyms: ["errand", "market", "pharmacy", "target"]
-        )
-    ]
+    private static func hasMorphologicalMatch(token: String, term: String) -> Bool {
+        guard token.count >= 4, term.count >= 4 else { return false }
+        if token == term { return true }
+
+        return tokenVariants(token).contains(term) || tokenVariants(term).contains(token)
+    }
+
+    private static func tokenVariants(_ token: String) -> Set<String> {
+        var variants: Set<String> = [token]
+
+        if token.hasSuffix("ies"), token.count > 3 {
+            variants.insert(String(token.dropLast(3)) + "y")
+        }
+
+        if token.hasSuffix("ing"), token.count > 4 {
+            let stem = String(token.dropLast(3))
+            variants.insert(stem)
+            variants.insert(stem + "e")
+        }
+
+        if token.hasSuffix("ed"), token.count > 3 {
+            let stem = String(token.dropLast(2))
+            variants.insert(stem)
+            variants.insert(stem + "e")
+        }
+
+        if token.hasSuffix("es"), token.count > 3 {
+            variants.insert(String(token.dropLast(2)))
+        }
+
+        if token.hasSuffix("s"), token.count > 2 {
+            variants.insert(String(token.dropLast()))
+        }
+
+        return variants
+    }
+
+    private static func semanticScore(for entry: IconCatalogEntry, query: NormalizedQuery) -> Int {
+        guard entry.priority > 0 else { return 0 }
+        guard let wordEmbedding else { return 0 }
+
+        let queryTokens = query.tokens.filter { $0.count >= 3 && wordEmbedding.contains($0) }
+        guard queryTokens.isEmpty == false else { return 0 }
+
+        let entryTokens = entry.searchTerms
+            .flatMap(LinguisticNormalizer.normalizedTokens(in:))
+            .filter { $0.count >= 3 && wordEmbedding.contains($0) }
+
+        guard entryTokens.isEmpty == false else { return 0 }
+
+        var bestDistance = Double.greatestFiniteMagnitude
+        for queryToken in queryTokens {
+            for entryToken in entryTokens {
+                let distance = wordEmbedding.distance(between: queryToken, and: entryToken, distanceType: .cosine)
+                if distance < bestDistance {
+                    bestDistance = distance
+                }
+            }
+        }
+
+        return switch bestDistance {
+        case ..<0.65:
+            78
+        case ..<0.8:
+            64
+        case ..<0.95:
+            52
+        default:
+            0
+        }
+    }
 }
 
 private struct RankedIconSuggestion: Comparable {
@@ -167,23 +176,8 @@ private struct RankedIconSuggestion: Comparable {
         if lhs.score == rhs.score {
             return lhs.suggestion.symbolName < rhs.suggestion.symbolName
         }
+
         return lhs.score > rhs.score
-    }
-}
-
-private struct IconCatalogEntry {
-    let iconSuggestion: IconSuggestion
-    let searchTerms: [NormalizedTerm]
-
-    init(
-        symbolName: String,
-        tintToken: String,
-        emoji: String,
-        terms: [String],
-        synonyms: [String] = []
-    ) {
-        self.iconSuggestion = IconSuggestion(symbolName: symbolName, tintToken: tintToken, emoji: emoji)
-        self.searchTerms = NormalizedTerm.makeAll(terms + synonyms)
     }
 }
 
@@ -191,11 +185,8 @@ private struct NormalizedQuery {
     let normalizedText: String
     let tokens: [String]
 
-    init(_ rawValue: String) {
-        let tokens = rawValue
-            .lowercased()
-            .components(separatedBy: CharacterSet.alphanumerics.inverted)
-            .filter { $0.isEmpty == false }
+    nonisolated init(_ rawValue: String) {
+        let tokens = LinguisticNormalizer.normalizedTokens(in: rawValue)
         self.tokens = tokens
         self.normalizedText = tokens.joined(separator: " ")
     }
@@ -209,15 +200,32 @@ private struct NormalizedTerm {
     let text: String
     let tokens: [String]
 
-    init(_ rawValue: String) {
+    nonisolated init(_ rawValue: String) {
         let query = NormalizedQuery(rawValue)
         self.text = query.normalizedText
         self.tokens = query.tokens
     }
+}
 
-    static func makeAll(_ values: [String]) -> [NormalizedTerm] {
-        values
-            .map { NormalizedTerm($0) }
-            .filter { $0.text.isEmpty == false }
+private enum LinguisticNormalizer {
+    nonisolated static func normalizedTokens(in text: String) -> [String] {
+        let lowered = text.lowercased()
+        let tagger = NLTagger(tagSchemes: [.lemma])
+        tagger.string = lowered
+
+        var tokens: [String] = []
+        let options: NLTagger.Options = [.omitPunctuation, .omitWhitespace, .joinContractions]
+        let range = lowered.startIndex..<lowered.endIndex
+
+        tagger.enumerateTags(in: range, unit: .word, scheme: .lemma, options: options) { tag, tokenRange in
+            let rawToken = String(lowered[tokenRange])
+            let normalized = tag?.rawValue ?? rawToken
+            if normalized.isEmpty == false {
+                tokens.append(normalized)
+            }
+            return true
+        }
+
+        return tokens
     }
 }

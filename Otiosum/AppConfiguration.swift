@@ -17,7 +17,8 @@ enum AppConfiguration {
             Event.self,
             CalendarLink.self,
             DayTemplate.self,
-            DailyBudget.self
+            DailyBudget.self,
+            IconCatalogSymbol.self
         ])
 
         if isUITesting {
@@ -119,6 +120,8 @@ enum AppConfiguration {
 
     @MainActor
     static func seedDefaultsIfNeeded(in context: ModelContext) throws {
+        try IconCatalogDatabase.prepareIfNeeded(in: context)
+
         if try context.fetch(FetchDescriptor<DayTemplate>()).isEmpty {
             context.insert(DayTemplate())
         }

@@ -289,6 +289,23 @@ final class DailyBudget {
     }
 }
 
+@Model
+final class IconCatalogSymbol {
+    @Attribute(.unique) var symbolName: String
+    var normalizedName: String
+
+    init(symbolName: String) {
+        self.symbolName = symbolName
+        self.normalizedName = Self.makeNormalizedName(from: symbolName)
+    }
+
+    nonisolated static func makeNormalizedName(from symbolName: String) -> String {
+        symbolName
+            .replacing(".", with: " ")
+            .lowercased()
+    }
+}
+
 // Keep the original placeholder model in the schema so local dev stores can open cleanly
 // while the new planner models take over the actual app behavior.
 @Model
