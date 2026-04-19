@@ -147,8 +147,8 @@ struct PlannerStoreTests {
         let store = PlannerStore()
         try store.ensureSeedData(in: modelContext)
 
-        let day = Date(timeIntervalSinceReferenceDate: 120_000)
-        let preferredStart = day.addingTimeInterval(TimeInterval((14 * 60 + 30) * 60))
+        let day = Calendar.current.startOfDay(for: Date(timeIntervalSinceReferenceDate: 120_000))
+        let preferredStart = Calendar.current.date(byAdding: .minute, value: 14 * 60 + 30, to: day) ?? day
         store.todayQuickCapture = "plan sprint"
 
         store.captureQuickItem(
@@ -224,8 +224,8 @@ struct PlannerStoreTests {
         let store = PlannerStore()
         try store.ensureSeedData(in: modelContext)
 
-        let day = Date(timeIntervalSinceReferenceDate: 160_000)
-        let anchor = day.addingTimeInterval(14 * 60 * 60)
+        let day = Calendar.current.startOfDay(for: Date(timeIntervalSinceReferenceDate: 160_000))
+        let anchor = Calendar.current.date(byAdding: .hour, value: 14, to: day) ?? day
         store.todayQuickCapture = "focus block"
         store.captureQuickItem(
             from: .today,
@@ -239,7 +239,7 @@ struct PlannerStoreTests {
         let items = try modelContext.fetch(FetchDescriptor<PlannableItem>())
         let item = try #require(items.first)
         #expect(item.title == "Focus block")
-        #expect(item.scheduledDay == Calendar.current.startOfDay(for: anchor))
+        #expect(item.scheduledDay == day)
         #expect(item.preferredStartMinutes == anchor.minutesSinceStartOfDay(using: .current))
         #expect(item.targetDurationMinutes == 45)
         #expect(store.todayQuickCapture.isEmpty)

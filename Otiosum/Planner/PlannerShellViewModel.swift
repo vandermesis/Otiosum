@@ -20,6 +20,22 @@ final class PlannerShellViewModel {
         set { store.todayQuickCapture = newValue }
     }
 
+    var todayQuickCaptureKind: PlannerItemKind {
+        IconSuggester.inferredKind(for: todayQuickCapture)
+    }
+
+    var todayQuickCaptureSuggestion: IconSuggestion? {
+        let title = todayQuickCapture.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard title.isEmpty == false else { return nil }
+        return IconSuggester.suggest(for: title, kind: todayQuickCaptureKind)
+    }
+
+    var todayQuickCaptureSuggestions: [IconSuggestion] {
+        let title = todayQuickCapture.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard title.isEmpty == false else { return [] }
+        return IconSuggester.suggestions(for: title, kind: todayQuickCaptureKind)
+    }
+
     var jarQuickCapture: String {
         get { store.jarQuickCapture }
         set { store.jarQuickCapture = newValue }

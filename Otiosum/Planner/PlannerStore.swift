@@ -64,7 +64,8 @@ final class PlannerStore {
         let title = rawTitle.trimmingCharacters(in: .whitespacesAndNewlines)
         guard title.isEmpty == false else { return }
 
-        let icon = IconSuggester.suggest(for: title)
+        let kind = IconSuggester.inferredKind(for: title)
+        let icon = IconSuggester.suggest(for: title, kind: kind)
         let resolvedPreferredStartMinutes: Int?
         if context == .today {
             if let preferredStartDate {
@@ -77,7 +78,7 @@ final class PlannerStore {
         }
         let item = PlannableItem(
             title: title.capitalizedSentence,
-            kind: title.lowercased().contains("idea") ? .idea : .task,
+            kind: kind,
             source: .local,
             suggestedIcon: icon.symbolName,
             tintToken: icon.tintToken,
@@ -123,10 +124,11 @@ final class PlannerStore {
         let title = todayQuickCapture.trimmingCharacters(in: .whitespacesAndNewlines)
         guard title.isEmpty == false else { return }
 
-        let icon = IconSuggester.suggest(for: title)
+        let kind = IconSuggester.inferredKind(for: title)
+        let icon = IconSuggester.suggest(for: title, kind: kind)
         let item = PlannableItem(
             title: title.capitalizedSentence,
-            kind: title.lowercased().contains("idea") ? .idea : .task,
+            kind: kind,
             source: .local,
             suggestedIcon: icon.symbolName,
             tintToken: icon.tintToken,

@@ -9,7 +9,7 @@ final class OtiosumUITests: XCTestCase {
     func testQuickAddKeepsKeyboardActiveForMultipleLetters() throws {
         let app = launchApp()
 
-        let quickField = app.searchFields["Add"]
+        let quickField = app.textFields["quick-add-field"]
         XCTAssertTrue(quickField.waitForExistence(timeout: 2))
 
         quickField.tap()
@@ -24,7 +24,7 @@ final class OtiosumUITests: XCTestCase {
     func testAddToTimelineWithEnterClearsInput() throws {
         let app = launchApp()
 
-        let quickField = app.searchFields["Add"]
+        let quickField = app.textFields["quick-add-field"]
         XCTAssertTrue(quickField.waitForExistence(timeout: 2))
         quickField.tap()
         quickField.typeText("focus sprint\n")
@@ -37,20 +37,11 @@ final class OtiosumUITests: XCTestCase {
     func testQuickAddToSomedayClearsInput() throws {
         let app = launchApp()
 
-        let quickField = app.searchFields["Add"]
+        let quickField = app.textFields["quick-add-field"]
         XCTAssertTrue(quickField.waitForExistence(timeout: 2))
         quickField.tap()
         quickField.typeText("someday writing")
-        let cancelButton = app.buttons.matching(NSPredicate(format: "label ==[c] %@", "Cancel")).firstMatch
-        let closeButton = app.buttons.matching(NSPredicate(format: "label ==[c] %@", "Close")).firstMatch
-        let closeKey = app.keys.matching(NSPredicate(format: "label ==[c] %@", "Close")).firstMatch
-        if cancelButton.exists {
-            cancelButton.tap()
-        } else if closeButton.exists {
-            closeButton.tap()
-        } else {
-            closeKey.tap()
-        }
+        app.buttons["quick-add-someday"].tap()
         let clearedPredicate = NSPredicate { _, _ in
             let value = quickField.value as? String
             return value == nil || value == "" || value == "Add"

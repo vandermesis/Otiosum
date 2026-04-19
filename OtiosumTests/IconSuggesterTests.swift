@@ -14,7 +14,8 @@ struct IconSuggesterTests {
             ("brainstorm", "sparkles", "amber", "💡"),
             ("read", "star.fill", "violet", "✨"),
             ("laundry", "house.fill", "sage", "🏠"),
-            ("code review", "laptopcomputer", "teal", "💻")
+            ("code review", "laptopcomputer", "teal", "💻"),
+            ("pick up groceries", "fork.knife", "peach", "🍽️")
         ]
     )
     func keywordMappings(
@@ -61,11 +62,34 @@ struct IconSuggesterTests {
         #expect(suggestion.symbolName == "bed.double.fill")
     }
 
-    @Test("The first matching keyword mapping wins")
-    func firstMatchWins() {
+    @Test("The strongest match wins over a weaker partial match")
+    func strongestMatchWins() {
         let suggestion = IconSuggester.suggest(for: "plan lunch")
 
         #expect(suggestion.symbolName == "fork.knife")
         #expect(suggestion.tintToken == "peach")
+    }
+
+    @Test("Suggestions are ranked with the strongest match first")
+    func suggestionsAreRanked() {
+        let suggestions = IconSuggester.suggestions(for: "doctor appointment", kind: .event)
+
+        #expect(suggestions.first?.symbolName == "person.crop.circle.badge.clock")
+    }
+
+    @Test("Suggestions append fallback when requested limit exceeds direct matches")
+    func suggestionsAppendFallback() {
+        let suggestions = IconSuggester.suggestions(for: "deep work review", kind: .task, limit: 3)
+
+        #expect(suggestions.first?.symbolName == "laptopcomputer")
+        #expect(suggestions.contains { $0.symbolName == "checklist" })
+    }
+
+    @Test("Inferred kind uses user text semantics")
+    func inferredKindFromTitle() {
+        #expect(IconSuggester.inferredKind(for: "Brainstorm outline") == .idea)
+        #expect(IconSuggester.inferredKind(for: "Doctor appointment") == .event)
+        #expect(IconSuggester.inferredKind(for: "Nap before dinner") == .protectedTime)
+        #expect(IconSuggester.inferredKind(for: "Finish laundry") == .task)
     }
 }

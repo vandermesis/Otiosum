@@ -14,7 +14,6 @@ struct PlannerShellView: View {
     @State private var isSomedaySheetPresented = false
     @State private var isSettingsPresented = false
     @State private var timelineCenterDate = Date.now
-    @State private var isSearchPresented = false
 
     private var template: DayTemplate? { templates.first }
     private var budget: DailyBudget? { budgets.first }
@@ -38,6 +37,10 @@ struct PlannerShellView: View {
 
     private var promptKey: String {
         viewModel.promptKey(for: selectedDayPlan)
+    }
+
+    private var todayQuickCaptureSuggestion: IconSuggestion? {
+        viewModel.todayQuickCaptureSuggestion
     }
 
     var body: some View {
@@ -121,29 +124,21 @@ struct PlannerShellView: View {
                             .accessibilityIdentifier("now-open-settings")
                         }
                         ToolbarItemGroup(placement: .bottomBar) {
-                            TextField("", text: todayQuickCaptureBinding)
-
-                            Button("Someday", systemImage: "archivebox") {
-
-                            }
+                            QuickCaptureToolbarContent(
+                                text: todayQuickCaptureBinding,
+                                suggestion: todayQuickCaptureSuggestion,
+                                onAddToToday: {
+                                    addSearchTextToTimeline(
+                                        templateSnapshot: templateSnapshot,
+                                        budgetSnapshot: budgetSnapshot
+                                    )
+                                },
+                                onAddToSomeday: {
+                                    addSearchTextToSomedayIfNeeded()
+                                }
+                            )
                         }
-
-
-//                        DefaultToolbarItem(kind: .search, placement: .bottomBar)
                     }
-                }
-                .searchable(
-                    text: todayQuickCaptureBinding,
-                    isPresented: $isSearchPresented,
-                    placement: .toolbar,
-                    prompt: "Add"
-                )
-                .onSubmit(of: .search) {
-                    addSearchTextToTimeline(templateSnapshot: templateSnapshot, budgetSnapshot: budgetSnapshot)
-                }
-                .onChange(of: isSearchPresented) { wasPresented, isPresented in
-                    guard wasPresented, isPresented == false else { return }
-                    addSearchTextToSomedayIfNeeded()
                 }
             }
         }
@@ -266,5 +261,42 @@ struct PlannerShellView: View {
     private func addSearchTextToSomedayIfNeeded() {
         guard viewModel.todayQuickCapture.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else { return }
         viewModel.addQuickItemToSomeday(modelContext: modelContext)
+    }
+}
+
+private struct QuickCaptureToolbarContent: View {
+    @Binding var text: String
+    let suggestion: IconSuggestion?
+    let onAddToToday: () -> Void
+    let onAddToSomeday: () -> Void
+
+    private var hasText: Bool {
+        text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            TextField("Add", text: $text)
+                .submitLabel(.done)
+                .onSubmit(onAddToToday)
+                .accessibilityIdentifier("quick-add-field")
+
+            if let suggestion {
+                PlannerIcon(symbolName: suggestion.symbolName, tintToken: suggestion.tintToken, compact: true)
+                    .accessibilityLabel(Text("Suggested icon"))
+            }
+
+            Button("Add", systemImage: "plus") {
+                onAddToToday()
+            }
+            .disabled(hasText == false)
+            .accessibilityIdentifier("quick-add-today")
+
+            Button("Someday", systemImage: "archivebox") {
+                onAddToSomeday()
+            }
+            .disabled(hasText == false)
+            .accessibilityIdentifier("quick-add-someday")
+        }
     }
 }
