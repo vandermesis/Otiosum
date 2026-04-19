@@ -166,6 +166,14 @@ enum QuickCaptureContext: String, Codable, CaseIterable, Identifiable, Sendable 
     var id: String { rawValue }
 }
 
+enum TimelineQuickAction: String, CaseIterable, Identifiable, Sendable {
+    case startNow
+    case markDone
+    case markUndone
+
+    var id: String { rawValue }
+}
+
 enum DropLane: String, CaseIterable, Identifiable, Sendable {
     case morning
     case afternoon

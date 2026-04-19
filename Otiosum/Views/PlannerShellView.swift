@@ -79,6 +79,38 @@ struct PlannerShellView: View {
                                     itemLookup: itemLookup,
                                     modelContext: modelContext
                                 )
+                            },
+                            onAdjustBlockDuration: { block, deltaMinutes in
+                                viewModel.adjustDuration(
+                                    for: block,
+                                    by: deltaMinutes,
+                                    itemLookup: itemLookup,
+                                    modelContext: modelContext
+                                )
+                            },
+                            onQuickAction: { block, action in
+                                switch action {
+                                case .startNow:
+                                    viewModel.markStartedNow(
+                                        for: block,
+                                        itemLookup: itemLookup,
+                                        modelContext: modelContext
+                                    )
+                                case .markDone:
+                                    viewModel.setCompletion(
+                                        for: block,
+                                        isCompleted: true,
+                                        itemLookup: itemLookup,
+                                        modelContext: modelContext
+                                    )
+                                case .markUndone:
+                                    viewModel.setCompletion(
+                                        for: block,
+                                        isCompleted: false,
+                                        itemLookup: itemLookup,
+                                        modelContext: modelContext
+                                    )
+                                }
                             }
                         )
                     }
@@ -107,6 +139,7 @@ struct PlannerShellView: View {
                 .tabViewBottomAccessory(isEnabled: viewModel.selectedTab == .today) {
                     NowQuickActionsAccessory(
                         quickCapture: todayQuickCaptureBinding,
+                        quickStartMinutes: todayQuickStartMinutesBinding,
                         onCapture: {
                             viewModel.captureQuickItem(
                                 from: .today,
@@ -171,7 +204,7 @@ struct PlannerShellView: View {
                     }
                 }
             }
-            .presentationDetents([.height(180), .medium, .large])
+            .presentationDetents([.height(700), .large])
             .presentationDragIndicator(.visible)
         }
     }
@@ -197,6 +230,13 @@ struct PlannerShellView: View {
                 viewModel.selectedTab = $0
                 viewModel.registerInteraction()
             }
+        )
+    }
+
+    private var todayQuickStartMinutesBinding: Binding<Int?> {
+        Binding(
+            get: { viewModel.todayQuickStartMinutes },
+            set: { viewModel.todayQuickStartMinutes = $0 }
         )
     }
 
@@ -240,88 +280,107 @@ struct PlannerShellView: View {
 }
 
 private struct NowQuickActionsAccessory: View {
-    @Environment(\.tabViewBottomAccessoryPlacement) private var placement
-
     @Binding var quickCapture: String
+    @Binding var quickStartMinutes: Int?
     let onCapture: () -> Void
     let onSomedayTap: () -> Void
 
     var body: some View {
-        Group {
-            switch placement {
-            case .inline:
-                InlineAccessoryLayout(
-                    quickCapture: $quickCapture,
-                    onCapture: onCapture,
-                    onSomedayTap: onSomedayTap
-                )
-            case .expanded, .none:
-                ExpandedAccessoryLayout(
-                    quickCapture: $quickCapture,
-                    onCapture: onCapture,
-                    onSomedayTap: onSomedayTap
-                )
-            @unknown default:
-                ExpandedAccessoryLayout(
-                    quickCapture: $quickCapture,
-                    onCapture: onCapture,
-                    onSomedayTap: onSomedayTap
-                )
-            }
-        }
+        CompactAccessoryLayout(
+            quickCapture: $quickCapture,
+            quickStartMinutes: $quickStartMinutes,
+            onCapture: onCapture,
+            onSomedayTap: onSomedayTap
+        )
     }
 }
 
-private struct InlineAccessoryLayout: View {
+private struct CompactAccessoryLayout: View {
     @Binding var quickCapture: String
+    @Binding var quickStartMinutes: Int?
     let onCapture: () -> Void
     let onSomedayTap: () -> Void
+    @State private var isStartPickerPresented = false
+    @State private var startTimeSelection = Date.now
 
     var body: some View {
         HStack(spacing: 10) {
-            TextField("One word is enough", text: $quickCapture)
+            TextField("Quick add", text: $quickCapture)
                 .textFieldStyle(.roundedBorder)
                 .submitLabel(.done)
                 .onSubmit(onCapture)
                 .accessibilityIdentifier("now-quick-add-field")
+                .frame(maxWidth: .infinity)
 
-            Button("Add", systemImage: "plus.circle.fill", action: onCapture)
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
+            Button {
+                isStartPickerPresented = true
+            } label: {
+                Image(systemName: "clock")
+                    .font(.footnote)
+            }
+            .buttonStyle(.bordered)
+            .clipShape(.circle)
+            .overlay(Circle().strokeBorder(.primary.opacity(0.15), lineWidth: 1))
+            .accessibilityLabel("Set start time")
+            .accessibilityValue(startTimeText)
+            .accessibilityIdentifier("now-quick-start-time-button")
+
+            Button(action: onCapture) {
+                Image(systemName: "plus")
+                    .font(.footnote.bold())
+            }
+            .buttonStyle(.borderedProminent)
+            .clipShape(.circle)
                 .accessibilityIdentifier("now-quick-add-button")
 
-            Button("Someday", systemImage: "archivebox", action: onSomedayTap)
+            Button(action: onSomedayTap) {
+                Image(systemName: "archivebox")
+                    .font(.footnote)
+            }
                 .buttonStyle(.bordered)
-                .controlSize(.small)
+                .clipShape(.circle)
                 .accessibilityIdentifier("now-someday-sheet-button")
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-    }
-}
-
-private struct ExpandedAccessoryLayout: View {
-    @Binding var quickCapture: String
-    let onCapture: () -> Void
-    let onSomedayTap: () -> Void
-
-    var body: some View {
-        HStack(spacing: 12) {
-            TextField("One word is enough", text: $quickCapture)
-                .textFieldStyle(.roundedBorder)
-                .submitLabel(.done)
-                .onSubmit(onCapture)
-                .accessibilityIdentifier("now-quick-add-field")
-
-            Button("Add", systemImage: "plus.circle.fill", action: onCapture)
-                .buttonStyle(.borderedProminent)
-                .accessibilityIdentifier("now-quick-add-button")
-
-            Button("Someday", systemImage: "archivebox", action: onSomedayTap)
-                .buttonStyle(.bordered)
-                .accessibilityIdentifier("now-someday-sheet-button")
+        .onAppear {
+            startTimeSelection = dateFromMinutes(quickStartMinutes) ?? Date.now
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .sheet(isPresented: $isStartPickerPresented) {
+            NavigationStack {
+                VStack(alignment: .leading, spacing: 12) {
+                    DatePicker(
+                        "Start",
+                        selection: $startTimeSelection,
+                        displayedComponents: .hourAndMinute
+                    )
+                    .datePickerStyle(.wheel)
+                    .labelsHidden()
+                }
+                .padding(16)
+                .navigationTitle("Start time")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("Apply") {
+                            quickStartMinutes = startTimeSelection.minutesSinceStartOfDay(using: .current)
+                            isStartPickerPresented = false
+                        }
+                        .accessibilityIdentifier("now-quick-start-time-apply")
+                    }
+                }
+            }
+            .presentationDetents([.height(320)])
+        }
+    }
+
+    private var startTimeText: String {
+        let date = dateFromMinutes(quickStartMinutes) ?? Date.now
+        return date.formatted(.dateTime.hour().minute())
+    }
+
+    private func dateFromMinutes(_ minutes: Int?) -> Date? {
+        guard let minutes else { return nil }
+        return Calendar.current.date(on: .now, minutesFromStartOfDay: minutes)
     }
 }

@@ -141,6 +141,82 @@ struct PlannerStoreTests {
         #expect(item.forceAfterBedtime == false)
     }
 
+    @Test("Today quick capture uses selected start minutes")
+    func captureQuickItemFromTodayUsesSelectedStart() throws {
+        let modelContext = try makeModelContext()
+        let store = PlannerStore()
+        try store.ensureSeedData(in: modelContext)
+
+        let day = Date(timeIntervalSinceReferenceDate: 120_000)
+        store.todayQuickCapture = "plan sprint"
+        store.todayQuickStartMinutes = 14 * 60 + 30
+
+        store.captureQuickItem(
+            from: .today,
+            modelContext: modelContext,
+            day: day,
+            template: .default
+        )
+
+        let items = try modelContext.fetch(FetchDescriptor<PlannableItem>())
+        let item = try #require(items.first)
+
+        #expect(item.title == "Plan sprint")
+        #expect(item.scheduledDay == day)
+        #expect(item.preferredStartMinutes == 14 * 60 + 30)
+        #expect(item.preferredTimeWindow == .afternoon)
+    }
+
+    @Test("Adjusting item duration clamps to valid bounds")
+    func adjustItemDurationClamps() throws {
+        let modelContext = try makeModelContext()
+        let store = PlannerStore()
+
+        let item = PlannableItem(
+            title: "Stretch duration",
+            suggestedIcon: "clock",
+            tintToken: "sky",
+            targetDurationMinutes: 30,
+            minimumDurationMinutes: 15
+        )
+        modelContext.insert(item)
+        try modelContext.save()
+
+        store.adjustDuration(for: item, by: 300, modelContext: modelContext)
+        #expect(item.targetDurationMinutes == 240)
+
+        store.adjustDuration(for: item, by: -400, modelContext: modelContext)
+        #expect(item.targetDurationMinutes == 15)
+    }
+
+    @Test("Starting item now reschedules and clears completion")
+    func startItemNowReschedules() throws {
+        let modelContext = try makeModelContext()
+        let store = PlannerStore()
+
+        let originalDate = Date(timeIntervalSinceReferenceDate: 130_000)
+        let item = PlannableItem(
+            title: "Start now task",
+            suggestedIcon: "play.fill",
+            tintToken: "mint",
+            scheduledDay: originalDate,
+            preferredStartMinutes: 8 * 60,
+            isCompleted: true,
+            isInJar: true
+        )
+        modelContext.insert(item)
+        try modelContext.save()
+
+        let start = Date(timeIntervalSinceReferenceDate: 140_000)
+        store.startItemNow(item, at: start, modelContext: modelContext)
+
+        let calendar = Calendar.current
+        #expect(item.scheduledDay == calendar.startOfDay(for: start))
+        #expect(item.preferredStartMinutes == start.minutesSinceStartOfDay(using: calendar))
+        #expect(item.isCompleted == false)
+        #expect(item.isInJar == false)
+    }
+
     @Test("Refresh prompts picks the first overflow and first shift proposal")
     func refreshPromptsSelectsFirstEntries() throws {
         let store = PlannerStore()

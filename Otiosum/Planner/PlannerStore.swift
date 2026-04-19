@@ -8,6 +8,7 @@ final class PlannerStore {
     var selectedTab: PlannerTab = .today
     var selectedDay: Date = .now
     var todayQuickCapture: String = ""
+    var todayQuickStartMinutes: Int?
     var jarQuickCapture: String = ""
     var pendingOverflow: PendingOverflowState?
     var pendingCalendarShift: PendingCalendarShiftState?
@@ -63,6 +64,9 @@ final class PlannerStore {
         guard title.isEmpty == false else { return }
 
         let icon = IconSuggester.suggest(for: title)
+        let preferredStartMinutes = context == .today
+            ? (todayQuickStartMinutes ?? roundedStartMinutes(template: template))
+            : nil
         let item = PlannableItem(
             title: title.capitalizedSentence,
             kind: title.lowercased().contains("idea") ? .idea : .task,
@@ -72,8 +76,10 @@ final class PlannerStore {
             targetDurationMinutes: 30,
             minimumDurationMinutes: 15,
             scheduledDay: context == .today ? day : nil,
-            preferredStartMinutes: context == .today ? roundedStartMinutes(template: template) : nil,
-            preferredTimeWindow: context == .today ? inferredWindow(for: .now) : .anytime,
+            preferredStartMinutes: preferredStartMinutes,
+            preferredTimeWindow: context == .today
+                ? inferredWindow(for: day, startMinutes: preferredStartMinutes ?? 0)
+                : .anytime,
             flexibility: .flexible,
             notes: "",
             isCompleted: false,
@@ -136,6 +142,41 @@ final class PlannerStore {
         modelContext: ModelContext
     ) {
         item.isCompleted.toggle()
+        try? modelContext.save()
+    }
+
+    func setCompletion(
+        _ item: PlannableItem,
+        isCompleted: Bool,
+        modelContext: ModelContext
+    ) {
+        item.isCompleted = isCompleted
+        try? modelContext.save()
+    }
+
+    func startItemNow(
+        _ item: PlannableItem,
+        at start: Date = .now,
+        modelContext: ModelContext
+    ) {
+        let calendar = Calendar.current
+        item.scheduledDay = calendar.startOfDay(for: start)
+        item.preferredStartMinutes = max(0, min(23 * 60 + 55, start.minutesSinceStartOfDay(using: calendar)))
+        item.preferredTimeWindow = inferredWindow(for: start)
+        item.isCompleted = false
+        item.isInJar = false
+        item.forceAfterBedtime = false
+        try? modelContext.save()
+    }
+
+    func adjustDuration(
+        for item: PlannableItem,
+        by deltaMinutes: Int,
+        modelContext: ModelContext
+    ) {
+        let minDuration = max(15, item.minimumDurationMinutes)
+        let adjusted = item.targetDurationMinutes + deltaMinutes
+        item.targetDurationMinutes = min(240, max(minDuration, adjusted))
         try? modelContext.save()
     }
 
@@ -321,6 +362,11 @@ final class PlannerStore {
         default:
             return .night
         }
+    }
+
+    private func inferredWindow(for day: Date, startMinutes: Int) -> PreferredTimeWindow {
+        let date = Calendar.current.date(on: day, minutesFromStartOfDay: startMinutes)
+        return inferredWindow(for: date)
     }
 }
 

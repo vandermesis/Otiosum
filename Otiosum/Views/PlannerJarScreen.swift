@@ -22,16 +22,19 @@ struct SomedayDrawerContent: View {
                 )
             } else {
                 ScrollView(.vertical) {
-                    LazyVStack(spacing: 10) {
+                    LazyVGrid(
+                        columns: [GridItem(.adaptive(minimum: 92), spacing: 14)],
+                        spacing: 14
+                    ) {
                         ForEach(items) { item in
-                            SomedayItemCard(item: item) {
+                            SomedayItemBall(item: item) {
                                 onSchedule(item, lane(for: item))
                             }
                         }
                     }
                     .padding(.vertical, 2)
                 }
-                .frame(maxHeight: 240)
+                .frame(maxHeight: 560)
                 .scrollIndicators(.hidden)
             }
         }
@@ -55,41 +58,36 @@ struct SomedayDrawerContent: View {
     }
 }
 
-private struct SomedayItemCard: View {
+private struct SomedayItemBall: View {
     let item: PlannableItem
     let onAddToNow: () -> Void
 
     var body: some View {
-        HStack(spacing: 12) {
-            PlannerIcon(symbolName: item.suggestedIcon, tintToken: item.tintToken, compact: true)
+        VStack(spacing: 8) {
+            ZStack {
+                Circle()
+                    .fill(tintColor(token: item.tintToken).opacity(0.22))
+                    .frame(width: 72, height: 72)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(item.title)
-                    .font(.subheadline)
-                    .lineLimit(1)
-
-                Text(item.kind == .idea ? "Idea" : "Task")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                PlannerIcon(symbolName: item.suggestedIcon, tintToken: item.tintToken, compact: false)
             }
+            .overlay(Circle().strokeBorder(Color.white.opacity(0.65), lineWidth: 1))
 
-            Spacer()
+            Text(item.title)
+                .font(.caption)
+                .lineLimit(2)
+                .multilineTextAlignment(.center)
 
-            Button("Add", systemImage: "plus.circle.fill", action: onAddToNow)
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
-                .accessibilityIdentifier("someday-add-\(item.title.testingIdentifier)")
+            Button(action: onAddToNow) {
+                Image(systemName: "plus")
+                    .font(.caption.bold())
+            }
+            .buttonStyle(.borderedProminent)
+            .clipShape(.circle)
+            .accessibilityIdentifier("someday-add-\(item.title.testingIdentifier)")
         }
-        .padding(12)
+        .padding(.vertical, 6)
         .draggable(item.id.uuidString)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color.white.opacity(0.82))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.55), lineWidth: 1)
-        )
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("someday-item-\(item.title.testingIdentifier)")
     }

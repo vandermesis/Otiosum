@@ -9,6 +9,8 @@ struct TodayScreen: View {
     let onRequestCalendarAccess: () -> Void
     let onDropSomedayItem: (UUID, Date) -> Bool
     let onRescheduleBlock: (PlannedBlock, Date) -> Void
+    let onAdjustBlockDuration: (PlannedBlock, Int) -> Void
+    let onQuickAction: (PlannedBlock, TimelineQuickAction) -> Void
 
     var body: some View {
         NavigationStack {
@@ -16,10 +18,6 @@ struct TodayScreen: View {
                 PlannerBackground(simple: budget.useSimplifiedMode)
 
                 VStack(spacing: 12) {
-                    DayHeader(day: day)
-                        .padding(.horizontal, 18)
-                        .padding(.top, 10)
-
                     if calendarService.canReadEvents == false {
                         PlannerMessageCard(
                             title: "Calendar is optional",
@@ -34,7 +32,9 @@ struct TodayScreen: View {
                         day: day,
                         plan: plan,
                         onDropSomedayItem: onDropSomedayItem,
-                        onRescheduleBlock: onRescheduleBlock
+                        onRescheduleBlock: onRescheduleBlock,
+                        onAdjustBlockDuration: onAdjustBlockDuration,
+                        onQuickAction: onQuickAction
                     )
                         .padding(.horizontal, 18)
                 }
@@ -49,13 +49,11 @@ private struct NowTimelineSection: View {
     let plan: DayPlan
     let onDropSomedayItem: (UUID, Date) -> Bool
     let onRescheduleBlock: (PlannedBlock, Date) -> Void
+    let onAdjustBlockDuration: (PlannedBlock, Int) -> Void
+    let onQuickAction: (PlannedBlock, TimelineQuickAction) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("A single view of what is active, what is next, and where open space is available.")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-
             TimeWheelView(
                 day: day,
                 blocks: plan.allBlocks,
@@ -64,7 +62,9 @@ private struct NowTimelineSection: View {
                 nextBlockID: plan.nextBlock?.id,
                 showsHeader: false,
                 onDropSomedayItem: onDropSomedayItem,
-                onRescheduleBlock: onRescheduleBlock
+                onRescheduleBlock: onRescheduleBlock,
+                onAdjustBlockDuration: onAdjustBlockDuration,
+                onQuickAction: onQuickAction
             )
             .frame(minHeight: 620)
             .clipShape(.rect(cornerRadius: 24))

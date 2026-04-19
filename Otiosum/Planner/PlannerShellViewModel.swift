@@ -20,6 +20,11 @@ final class PlannerShellViewModel {
         set { store.todayQuickCapture = newValue }
     }
 
+    var todayQuickStartMinutes: Int? {
+        get { store.todayQuickStartMinutes }
+        set { store.todayQuickStartMinutes = newValue }
+    }
+
     var jarQuickCapture: String {
         get { store.jarQuickCapture }
         set { store.jarQuickCapture = newValue }
@@ -194,6 +199,41 @@ final class PlannerShellViewModel {
         guard block.source == .local, block.isProtected == false else { return }
         guard let item = itemLookup[block.itemID] else { return }
         store.rescheduleItem(item, to: start, modelContext: modelContext)
+    }
+
+    func adjustDuration(
+        for block: PlannedBlock,
+        by deltaMinutes: Int,
+        itemLookup: [UUID: PlannableItem],
+        modelContext: ModelContext
+    ) {
+        registerInteraction()
+        guard block.source == .local, block.isProtected == false else { return }
+        guard let item = itemLookup[block.itemID] else { return }
+        store.adjustDuration(for: item, by: deltaMinutes, modelContext: modelContext)
+    }
+
+    func markStartedNow(
+        for block: PlannedBlock,
+        itemLookup: [UUID: PlannableItem],
+        modelContext: ModelContext
+    ) {
+        registerInteraction()
+        guard block.source == .local, block.isProtected == false else { return }
+        guard let item = itemLookup[block.itemID] else { return }
+        store.startItemNow(item, modelContext: modelContext)
+    }
+
+    func setCompletion(
+        for block: PlannedBlock,
+        isCompleted: Bool,
+        itemLookup: [UUID: PlannableItem],
+        modelContext: ModelContext
+    ) {
+        registerInteraction()
+        guard block.source == .local else { return }
+        guard let item = itemLookup[block.itemID] else { return }
+        store.setCompletion(item, isCompleted: isCompleted, modelContext: modelContext)
     }
 
     func updateCalendarFlexibility(

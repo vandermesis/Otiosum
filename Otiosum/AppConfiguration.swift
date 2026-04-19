@@ -6,6 +6,10 @@ enum AppConfiguration {
         ProcessInfo.processInfo.arguments.contains("UITEST")
     }
 
+    static var hasDeterministicTimelineTask: Bool {
+        ProcessInfo.processInfo.arguments.contains("UITEST_TIMELINE_TASK")
+    }
+
     @MainActor
     static func makeModelContainer() -> ModelContainer {
         let schema = Schema([
@@ -133,6 +137,30 @@ enum AppConfiguration {
                 isInJar: true
             )
         )
+
+        if hasDeterministicTimelineTask {
+            let now = Date.now
+            let currentMinutes = now.minutesSinceStartOfDay(using: .current)
+            let roundedMinutes = ((currentMinutes + 2) / 5) * 5
+            let timelineIcon = IconSuggester.suggest(for: "UI timeline task")
+
+            context.insert(
+                PlannableItem(
+                    title: "UI Timeline Task",
+                    kind: .task,
+                    source: .local,
+                    suggestedIcon: timelineIcon.symbolName,
+                    tintToken: timelineIcon.tintToken,
+                    targetDurationMinutes: 30,
+                    minimumDurationMinutes: 15,
+                    scheduledDay: today,
+                    preferredStartMinutes: roundedMinutes,
+                    preferredTimeWindow: .anytime,
+                    flexibility: .flexible,
+                    isInJar: false
+                )
+            )
+        }
 
         try context.save()
     }

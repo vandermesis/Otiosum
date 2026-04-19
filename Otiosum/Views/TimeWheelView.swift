@@ -11,6 +11,8 @@ struct TimeWheelView: View {
     let showsHeader: Bool
     let onDropSomedayItem: ((UUID, Date) -> Bool)?
     let onRescheduleBlock: ((PlannedBlock, Date) -> Void)?
+    let onAdjustBlockDuration: ((PlannedBlock, Int) -> Void)?
+    let onQuickAction: ((PlannedBlock, TimelineQuickAction) -> Void)?
 
     @State private var scrollAnchorDate: Date?
     @State private var dragState: TimelineDragState?
@@ -32,7 +34,9 @@ struct TimeWheelView: View {
         nextBlockID: UUID? = nil,
         showsHeader: Bool = true,
         onDropSomedayItem: ((UUID, Date) -> Bool)? = nil,
-        onRescheduleBlock: ((PlannedBlock, Date) -> Void)? = nil
+        onRescheduleBlock: ((PlannedBlock, Date) -> Void)? = nil,
+        onAdjustBlockDuration: ((PlannedBlock, Int) -> Void)? = nil,
+        onQuickAction: ((PlannedBlock, TimelineQuickAction) -> Void)? = nil
     ) {
         self.day = day
         self.blocks = blocks
@@ -42,6 +46,8 @@ struct TimeWheelView: View {
         self.showsHeader = showsHeader
         self.onDropSomedayItem = onDropSomedayItem
         self.onRescheduleBlock = onRescheduleBlock
+        self.onAdjustBlockDuration = onAdjustBlockDuration
+        self.onQuickAction = onQuickAction
     }
 
     var body: some View {
@@ -79,6 +85,12 @@ struct TimeWheelView: View {
                             },
                             onDragEnded: { block in
                                 handleDragEnded(for: block)
+                            },
+                            onAdjustDuration: { block, deltaMinutes in
+                                handleAdjustDuration(for: block, deltaMinutes: deltaMinutes)
+                            },
+                            onQuickAction: { block, action in
+                                handleQuickAction(for: block, action: action)
                             }
                         )
                     }
@@ -201,6 +213,17 @@ struct TimeWheelView: View {
         self.dragState = nil
     }
 
+    private func handleAdjustDuration(for block: PlannedBlock, deltaMinutes: Int) {
+        guard isDraggable(block) else { return }
+        guard deltaMinutes != 0 else { return }
+        onAdjustBlockDuration?(block, deltaMinutes)
+    }
+
+    private func handleQuickAction(for block: PlannedBlock, action: TimelineQuickAction) {
+        guard block.source == .local else { return }
+        onQuickAction?(block, action)
+    }
+
     private func isDraggable(_ block: PlannedBlock) -> Bool {
         block.source == .local && block.isProtected == false && block.isCompleted == false
     }
@@ -269,6 +292,8 @@ private struct TimelineCanvasView: View {
     let onDropSomedayItem: (UUID, Date) -> Bool
     let onDragChanged: (PlannedBlock, Date) -> Void
     let onDragEnded: (PlannedBlock) -> Void
+    let onAdjustDuration: (PlannedBlock, Int) -> Void
+    let onQuickAction: (PlannedBlock, TimelineQuickAction) -> Void
 
     private var slots: [Date] {
         strideDates(from: range.lowerBound, through: range.upperBound, everyMinutes: slotMinutes)
@@ -381,10 +406,10 @@ private struct TimelineCanvasView: View {
 
                         TimelineDragGhostCapsule(
                             width: laneWidth,
+                            height: max(height(for: block), 44),
                             isInvalid: dragState.conflictingBlockTitle != nil
                         )
                         .offset(x: 96, y: yOffset(for: dragState.proposedStart))
-                        .frame(height: max(height(for: block), 44), alignment: .top)
                     }
                 }
             }
@@ -413,16 +438,22 @@ private struct TimelineCanvasView: View {
                 isCurrent: block.id == currentBlockID,
                 isNext: block.id == nextBlockID,
                 draggable: true,
+                height: max(height(for: block), 44),
                 onDragChanged: { proposed in
                     onDragChanged(block, proposed)
                 },
                 onDragEnded: {
                     onDragEnded(block)
+                },
+                onResizeEnded: { deltaMinutes in
+                    onAdjustDuration(block, deltaMinutes)
+                },
+                onQuickAction: { action in
+                    onQuickAction(block, action)
                 }
             )
             .opacity(0.35)
             .offset(x: 96, y: yOffset(for: block.start))
-            .frame(height: max(height(for: block), 44), alignment: .top)
         } else {
             TimelineTaskCapsule(
                 block: block,
@@ -432,15 +463,21 @@ private struct TimelineCanvasView: View {
                 isCurrent: block.id == currentBlockID,
                 isNext: block.id == nextBlockID,
                 draggable: block.source == .local && block.isProtected == false && block.isCompleted == false,
+                height: max(height(for: block), 44),
                 onDragChanged: { proposed in
                     onDragChanged(block, proposed)
                 },
                 onDragEnded: {
                     onDragEnded(block)
+                },
+                onResizeEnded: { deltaMinutes in
+                    onAdjustDuration(block, deltaMinutes)
+                },
+                onQuickAction: { action in
+                    onQuickAction(block, action)
                 }
             )
             .offset(x: 96, y: yOffset(for: block.start))
-            .frame(height: max(height(for: block), 44), alignment: .top)
         }
     }
 
@@ -549,30 +586,82 @@ private struct TimelineTaskCapsule: View {
     let isCurrent: Bool
     let isNext: Bool
     let draggable: Bool
+    let height: CGFloat
     let onDragChanged: (Date) -> Void
     let onDragEnded: () -> Void
+    let onResizeEnded: (Int) -> Void
+    let onQuickAction: (TimelineQuickAction) -> Void
+
+    @State private var resizeDeltaMinutes = 0
 
     var body: some View {
-        HStack(spacing: 8) {
-            PlannerIcon(symbolName: block.symbolName, tintToken: block.tintToken, compact: true)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                PlannerIcon(symbolName: block.symbolName, tintToken: block.tintToken, compact: true)
 
-            Text(shortTitle)
-                .font(.subheadline)
-                .lineLimit(1)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                Text(shortTitle)
+                    .font(.subheadline)
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
-            if isCurrent {
-                TimelineTag(text: "Now", tint: .red)
-            } else if isNext {
-                TimelineTag(text: "Next", tint: .blue)
+                if isCurrent {
+                    TimelineTag(text: "Now", tint: .red)
+                } else if isNext {
+                    TimelineTag(text: "Next", tint: .blue)
+                }
+
+                if block.source == .local {
+                    HStack(spacing: 4) {
+                        if block.isCompleted {
+                            Button {
+                                onQuickAction(.markUndone)
+                            } label: {
+                                Image(systemName: "arrow.uturn.backward.circle.fill")
+                                    .font(.caption)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("timeline-task-undo-\(block.title.testingIdentifier)")
+                        } else {
+                            Button {
+                                onQuickAction(.startNow)
+                            } label: {
+                                Image(systemName: "play.circle.fill")
+                                    .font(.caption)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("timeline-task-start-\(block.title.testingIdentifier)")
+
+                            Button {
+                                onQuickAction(.markDone)
+                            } label: {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .font(.caption)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("timeline-task-done-\(block.title.testingIdentifier)")
+                        }
+                    }
+                    .foregroundStyle(.secondary)
+                } else {
+                    Image(systemName: statusSymbol)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .frame(width: 24, height: 24)
+                }
             }
 
-            Image(systemName: statusSymbol)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            if draggable {
+                Capsule()
+                    .fill(.secondary.opacity(0.3))
+                    .frame(width: 42, height: 5)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    .accessibilityLabel("Resize task duration")
+                    .gesture(resizeGesture)
+            }
         }
         .padding(.horizontal, 10)
-        .frame(width: width, height: 44, alignment: .leading)
+        .padding(.vertical, 8)
+        .frame(width: width, height: max(effectiveHeight, 44), alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(Color.white.opacity(0.88))
@@ -583,10 +672,7 @@ private struct TimelineTaskCapsule: View {
         )
         .contentShape(.rect)
         .gesture(dragGesture)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(accessibilityLabel)
-        .accessibilityValue(accessibilityValue)
-        .accessibilityHint(draggable ? "Drag up or down to move this task" : "Fixed task")
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("timeline-task-\(block.title.testingIdentifier)")
     }
 
@@ -604,8 +690,32 @@ private struct TimelineTaskCapsule: View {
             }
     }
 
+    private var resizeGesture: some Gesture {
+        DragGesture(minimumDistance: 2)
+            .onChanged { value in
+                guard draggable else { return }
+                let rawDelta = Int((-value.translation.height / pointsPerMinute).rounded())
+                resizeDeltaMinutes = nearestStep(rawDelta, step: 5)
+            }
+            .onEnded { _ in
+                guard draggable else { return }
+                let delta = resizeDeltaMinutes
+                resizeDeltaMinutes = 0
+                onResizeEnded(delta)
+            }
+    }
+
+    private var effectiveHeight: CGFloat {
+        height + CGFloat(resizeDeltaMinutes) * pointsPerMinute
+    }
+
     private var shortTitle: String {
         String(block.title.prefix(18))
+    }
+
+    private func nearestStep(_ minutes: Int, step: Int) -> Int {
+        guard step > 1 else { return minutes }
+        return Int((Double(minutes) / Double(step)).rounded()) * step
     }
 
     private var statusSymbol: String {
@@ -648,27 +758,6 @@ private struct TimelineTaskCapsule: View {
         return .black.opacity(0.12)
     }
 
-    private var accessibilityLabel: String {
-        block.title
-    }
-
-    private var accessibilityValue: String {
-        let span = "\(block.start.formatted(.dateTime.hour().minute())) to \(block.end.formatted(.dateTime.hour().minute()))"
-
-        if block.isCompleted {
-            return "\(span), completed"
-        }
-
-        if now > block.end {
-            return "\(span), overdue"
-        }
-
-        if now >= block.start && now <= block.end {
-            return "\(span), active"
-        }
-
-        return "\(span), upcoming"
-    }
 }
 
 private struct TimelineGapCard: View {
@@ -766,13 +855,14 @@ private struct TimelineDropMessageView: View {
 
 private struct TimelineDragGhostCapsule: View {
     let width: CGFloat
+    let height: CGFloat
     let isInvalid: Bool
 
     var body: some View {
         RoundedRectangle(cornerRadius: 14, style: .continuous)
             .strokeBorder(style: StrokeStyle(lineWidth: 1.2, dash: [5, 4]))
             .foregroundStyle((isInvalid ? Color.red : .primary).opacity(0.5))
-            .frame(width: width, height: 44)
+            .frame(width: width, height: height)
             .background(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .fill((isInvalid ? Color.red : .white).opacity(0.22))

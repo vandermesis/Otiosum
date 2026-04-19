@@ -13,7 +13,7 @@ final class OtiosumUITests: XCTestCase {
         XCTAssertTrue(app.tabBars.buttons["Future"].exists)
         XCTAssertTrue(app.tabBars.buttons["Settings"].exists)
 
-        let quickField = app.textFields["One word is enough"]
+        let quickField = app.textFields["Quick add"]
         XCTAssertTrue(quickField.waitForExistence(timeout: 2))
 
         quickField.tap()
@@ -21,6 +21,32 @@ final class OtiosumUITests: XCTestCase {
         app.buttons["now-quick-add-button"].tap()
 
         XCTAssertTrue(app.tabBars.buttons["Now"].exists)
+    }
+
+    @MainActor
+    func testQuickAddStartTimePickerFlow() throws {
+        let app = launchApp()
+
+        let startButton = app.buttons["now-quick-start-time-button"]
+        XCTAssertTrue(startButton.waitForExistence(timeout: 2))
+        startButton.tap()
+
+        XCTAssertTrue(app.buttons["now-quick-add-button"].exists)
+    }
+
+    @MainActor
+    func testTimelineQuickActionMarkDone() throws {
+        let app = launchApp(extraArguments: ["UITEST_TIMELINE_TASK"])
+
+        let taskIdentifier = "ui-timeline-task"
+        let taskElement = app.otherElements["timeline-task-\(taskIdentifier)"]
+        XCTAssertTrue(taskElement.waitForExistence(timeout: 10))
+
+        let markDoneButton = app.descendants(matching: .any)["timeline-task-done-\(taskIdentifier)"]
+        XCTAssertTrue(markDoneButton.waitForExistence(timeout: 10))
+        markDoneButton.tap()
+
+        XCTAssertTrue(taskElement.exists)
     }
 
     @MainActor
@@ -44,9 +70,10 @@ final class OtiosumUITests: XCTestCase {
         }
     }
 
-    private func launchApp() -> XCUIApplication {
+    private func launchApp(extraArguments: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments.append("UITEST")
+        app.launchArguments.append(contentsOf: extraArguments)
         app.launch()
         return app
     }
