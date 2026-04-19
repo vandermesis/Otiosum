@@ -314,6 +314,7 @@ struct PlannedBlock: Identifiable, Equatable, Sendable {
     let symbolName: String
     let tintToken: String
     let notes: String
+    let isAllDay: Bool
     let protectedCategory: ProtectedCategory?
     let isCompleted: Bool
     let status: InferredProgressStatus

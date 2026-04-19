@@ -158,6 +158,7 @@ struct InferenceEngineTests {
             symbolName: "checklist",
             tintToken: "mint",
             notes: "",
+            isAllDay: false,
             protectedCategory: protectedCategory,
             isCompleted: isCompleted,
             status: .upcoming,

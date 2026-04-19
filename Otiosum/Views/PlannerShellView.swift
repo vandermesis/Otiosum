@@ -105,12 +105,6 @@ struct PlannerShellView: View {
                         },
                         onTimelineDraftMoved: { start in
                             viewModel.updateTimelineDraftStart(start)
-                        },
-                        onConfirmTimelineDraft: {
-                            viewModel.confirmTimelineDraft(modelContext: modelContext)
-                        },
-                        onCancelTimelineDraft: {
-                            viewModel.cancelTimelineDraft()
                         }
                     )
                     .toolbar {
@@ -136,6 +130,12 @@ struct PlannerShellView: View {
                         },
                         onAddToSomeday: {
                             viewModel.addQuickItemToSomeday(modelContext: modelContext)
+                        },
+                        onConfirmDraft: {
+                            viewModel.confirmTimelineDraft(modelContext: modelContext)
+                        },
+                        onCancelDraft: {
+                            viewModel.cancelTimelineDraft()
                         }
                     )
                 }
@@ -248,6 +248,8 @@ private struct NowQuickAddComposer: View {
     let isDraftingTimeline: Bool
     let onAddToTimeline: () -> Void
     let onAddToSomeday: () -> Void
+    let onConfirmDraft: () -> Void
+    let onCancelDraft: () -> Void
 
     @FocusState private var isTextFieldFocused: Bool
 
@@ -257,29 +259,65 @@ private struct NowQuickAddComposer: View {
                 .textFieldStyle(.roundedBorder)
                 .submitLabel(.done)
                 .focused($isTextFieldFocused)
-                .onSubmit(onAddToTimeline)
+                .onSubmit {
+                    if isDraftingTimeline {
+                        onConfirmDraft()
+                    } else {
+                        onAddToTimeline()
+                    }
+                }
                 .accessibilityIdentifier("now-quick-add-field")
                 .frame(maxWidth: .infinity)
 
-            Button(action: onAddToTimeline) {
-                Image(systemName: "plus")
-                    .font(.footnote.bold())
-            }
-            .buttonStyle(.borderedProminent)
-            .clipShape(.circle)
-            .disabled(isDraftingTimeline)
-            .accessibilityIdentifier("now-quick-add-button")
-            .accessibilityLabel("Add to timeline")
+            if isDraftingTimeline {
+                Button {
+                    isTextFieldFocused = false
+                    onCancelDraft()
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.footnote.bold())
+                }
+                .buttonStyle(.bordered)
+                .clipShape(.circle)
+                .accessibilityIdentifier("timeline-draft-cancel")
+                .accessibilityLabel("Cancel placement")
 
-            Button(action: onAddToSomeday) {
-                Image(systemName: "archivebox")
-                    .font(.footnote)
+                Button {
+                    isTextFieldFocused = false
+                    onConfirmDraft()
+                } label: {
+                    Image(systemName: "checkmark")
+                        .font(.footnote.bold())
+                }
+                .buttonStyle(.borderedProminent)
+                .clipShape(.circle)
+                .accessibilityIdentifier("timeline-draft-confirm")
+                .accessibilityLabel("Place task")
+            } else {
+                Button {
+                    isTextFieldFocused = false
+                    onAddToTimeline()
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.footnote.bold())
+                }
+                .buttonStyle(.borderedProminent)
+                .clipShape(.circle)
+                .accessibilityIdentifier("now-quick-add-button")
+                .accessibilityLabel("Add to timeline")
+
+                Button {
+                    isTextFieldFocused = false
+                    onAddToSomeday()
+                } label: {
+                    Image(systemName: "archivebox")
+                        .font(.footnote)
+                }
+                .buttonStyle(.bordered)
+                .clipShape(.circle)
+                .accessibilityIdentifier("now-someday-sheet-button")
+                .accessibilityLabel("Save to someday")
             }
-            .buttonStyle(.bordered)
-            .clipShape(.circle)
-            .disabled(isDraftingTimeline)
-            .accessibilityIdentifier("now-someday-sheet-button")
-            .accessibilityLabel("Save to someday")
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)

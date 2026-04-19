@@ -13,8 +13,6 @@ struct TodayScreen: View {
     let onAdjustBlockDuration: (PlannedBlock, Int) -> Void
     let onQuickAction: (PlannedBlock, TimelineQuickAction) -> Void
     let onTimelineDraftMoved: (Date) -> Void
-    let onConfirmTimelineDraft: () -> Void
-    let onCancelTimelineDraft: () -> Void
 
     var body: some View {
         ZStack {
@@ -39,9 +37,7 @@ struct TodayScreen: View {
                     onRescheduleBlock: onRescheduleBlock,
                     onAdjustBlockDuration: onAdjustBlockDuration,
                     onQuickAction: onQuickAction,
-                    onTimelineDraftMoved: onTimelineDraftMoved,
-                    onConfirmTimelineDraft: onConfirmTimelineDraft,
-                    onCancelTimelineDraft: onCancelTimelineDraft
+                    onTimelineDraftMoved: onTimelineDraftMoved
                 )
                 .padding(.horizontal, 18)
             }
@@ -58,8 +54,6 @@ private struct NowTimelineSection: View {
     let onAdjustBlockDuration: (PlannedBlock, Int) -> Void
     let onQuickAction: (PlannedBlock, TimelineQuickAction) -> Void
     let onTimelineDraftMoved: (Date) -> Void
-    let onConfirmTimelineDraft: () -> Void
-    let onCancelTimelineDraft: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -83,18 +77,6 @@ private struct NowTimelineSection: View {
                 RoundedRectangle(cornerRadius: 24, style: .continuous)
                     .strokeBorder(Color.white.opacity(0.5), lineWidth: 1)
             )
-
-            if timelineDraft != nil {
-                HStack(spacing: 10) {
-                    Button("Cancel", systemImage: "xmark.circle", action: onCancelTimelineDraft)
-                        .buttonStyle(.bordered)
-                        .accessibilityIdentifier("timeline-draft-cancel")
-
-                    Button("Place Task", systemImage: "checkmark.circle.fill", action: onConfirmTimelineDraft)
-                        .buttonStyle(.borderedProminent)
-                        .accessibilityIdentifier("timeline-draft-confirm")
-                }
-            }
         }
     }
 }

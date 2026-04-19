@@ -128,6 +128,9 @@ struct TimeWheelView: View {
                         .accessibilityHint("Centers the timeline around the current time")
                     }
                 }
+                .overlay(alignment: .center) {
+                    TimelineCenterNowLine(date: scrollAnchorDate ?? now)
+                }
                 .onAppear {
                     jumpToNow(using: now)
                 }
@@ -243,6 +246,7 @@ struct TimeWheelView: View {
 
         return blocks.first { block in
             guard block.id != movingBlock.id else { return false }
+            guard block.isAllDay == false else { return false }
             let fixed = block.isProtected || block.source == .calendar || block.flexibility == .locked
             guard fixed else { return false }
             return proposedStart < block.end && proposedEnd > block.start
@@ -311,6 +315,14 @@ private struct TimelineCanvasView: View {
         strideDates(from: range.lowerBound, through: range.upperBound, everyMinutes: slotMinutes)
     }
 
+    private var allDayBlocks: [PlannedBlock] {
+        blocks.filter { $0.source == .calendar && $0.isAllDay }
+    }
+
+    private var timedBlocks: [PlannedBlock] {
+        blocks.filter { !($0.source == .calendar && $0.isAllDay) }
+    }
+
     private var totalHeight: CGFloat {
         CGFloat(slots.count) * slotHeight
     }
@@ -319,12 +331,8 @@ private struct TimelineCanvasView: View {
         CGFloat(slotMinutes) * pointsPerMinute
     }
 
-    private var nowOffset: CGFloat {
-        yOffset(for: now)
-    }
-
     private var gapItems: [TimelineGapItem] {
-        let sortedBlocks = blocks.sorted { $0.start < $1.start }
+        let sortedBlocks = timedBlocks.sorted { $0.start < $1.start }
         guard sortedBlocks.count > 1 else { return [] }
 
         let defaultTips = [
@@ -397,12 +405,18 @@ private struct TimelineCanvasView: View {
                     .frame(height: showsHeader ? 52 : 0)
 
                 ZStack(alignment: .topLeading) {
+                    ForEach(allDayBlocks) { block in
+                        TimelineAllDayBackgroundBand(block: block, width: laneWidth)
+                            .offset(x: 96, y: yOffset(for: block.start))
+                            .frame(height: height(for: block), alignment: .top)
+                    }
+
                     ForEach(gapItems) { gap in
                         TimelineGapCard(item: gap)
                             .offset(x: 96, y: yOffset(for: gap.date))
                     }
 
-                    ForEach(blocks) { block in
+                    ForEach(timedBlocks) { block in
                         blockLayer(for: block)
                     }
 
@@ -420,10 +434,7 @@ private struct TimelineCanvasView: View {
                         .frame(height: 66, alignment: .top)
                     }
 
-                    TimelineNowMarker()
-                        .offset(x: 84, y: nowOffset)
-
-                    if let dragState, let block = blocks.first(where: { $0.id == dragState.blockID }) {
+                    if let dragState, let block = timedBlocks.first(where: { $0.id == dragState.blockID }) {
                         TimelineDragTimeLabel(
                             date: dragState.proposedStart,
                             conflictTitle: dragState.conflictingBlockTitle
@@ -707,12 +718,19 @@ private struct TimelineTaskCapsule: View {
             }
 
             if draggable {
-                Capsule()
-                    .fill(.secondary.opacity(0.3))
-                    .frame(width: 42, height: 5)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-                    .accessibilityLabel("Resize task duration")
-                    .gesture(resizeGesture)
+                HStack(spacing: 4) {
+                    Image(systemName: "arrow.up.and.down")
+                        .font(.caption2)
+                    Capsule()
+                        .fill(.secondary.opacity(0.35))
+                        .frame(width: 64, height: 8)
+                }
+                .padding(.horizontal, 6)
+                .padding(.vertical, 4)
+                .background(Color.white.opacity(0.5), in: Capsule())
+                .frame(maxWidth: .infinity, alignment: .trailing)
+                .accessibilityLabel("Resize task duration")
+                .gesture(resizeGesture)
             }
         }
         .padding(.horizontal, 10)
@@ -727,7 +745,7 @@ private struct TimelineTaskCapsule: View {
                 .strokeBorder(borderColor, lineWidth: isCurrent ? 2 : 1)
         )
         .contentShape(.rect)
-        .gesture(dragGesture)
+        .highPriorityGesture(dragGesture)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("timeline-task-\(block.title.testingIdentifier)")
     }
@@ -864,19 +882,30 @@ private struct TimelineTag: View {
     }
 }
 
-private struct TimelineNowMarker: View {
+private struct TimelineCenterNowLine: View {
+    let date: Date
+
     var body: some View {
         HStack(spacing: 8) {
-            Circle()
-                .fill(Color.red)
-                .frame(width: 8, height: 8)
+            Text(date.formatted(.dateTime.weekday(.abbreviated).hour().minute()))
+                .font(.caption.bold())
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+                .background(Color.white.opacity(0.92), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .strokeBorder(Color.red.opacity(0.35), lineWidth: 1)
+                )
+                .frame(width: 84, alignment: .trailing)
 
             Rectangle()
                 .fill(Color.red.opacity(0.6))
                 .frame(height: 1.5)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityLabel("Current time")
+        .padding(.horizontal, 8)
+        .allowsHitTesting(false)
+        .accessibilityLabel("Timeline center")
+        .accessibilityValue(date.formatted(.dateTime.weekday(.abbreviated).hour().minute()))
     }
 }
 
@@ -970,6 +999,41 @@ private struct TimelineDraftGhostCapsule: View {
                 }
         )
         .accessibilityIdentifier("timeline-draft-ghost")
+    }
+}
+
+private struct TimelineAllDayBackgroundBand: View {
+    let block: PlannedBlock
+    let width: CGFloat
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
+                Image(systemName: block.symbolName)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text(block.title)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(10)
+        .frame(width: width, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(tintColor(token: block.tintToken).opacity(0.13))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(tintColor(token: block.tintToken).opacity(0.2), lineWidth: 1)
+        )
+        .allowsHitTesting(false)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("All day event")
+        .accessibilityValue(block.title)
     }
 }
 

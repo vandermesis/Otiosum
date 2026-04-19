@@ -40,7 +40,10 @@ struct PlannerEngine {
             endOfDay: endOfDay
         )
 
-        var allBlocks = (protectedBlocks + calendarBlocks).sorted(by: blockSort)
+        let allDayCalendarBlocks = calendarBlocks.filter(\.isAllDay)
+        let timedCalendarBlocks = calendarBlocks.filter { !$0.isAllDay }
+
+        var allBlocks = (protectedBlocks + timedCalendarBlocks).sorted(by: blockSort)
         var overflowIssues: [OverflowIssue] = []
 
         let scheduledItems = localItems
@@ -78,7 +81,7 @@ struct PlannerEngine {
             endOfDay: endOfDay
         )
 
-        let finalBlocks = decorateStatuses(adjusted.blocks, context: context)
+        let finalBlocks = decorateStatuses(adjusted.blocks + allDayCalendarBlocks, context: context)
         overflowIssues.append(contentsOf: adjusted.overflowIssues)
 
         let budgetSummary = makeBudgetSummary(
@@ -97,7 +100,7 @@ struct PlannerEngine {
         )
 
         let incompleteBlocks = finalBlocks
-            .filter { $0.isCompleted == false }
+            .filter { $0.isCompleted == false && $0.isAllDay == false }
             .sorted(by: blockSort)
 
         let nowBlock = incompleteBlocks.last(where: { context.now >= $0.start && context.now < $0.end })
@@ -172,6 +175,7 @@ struct PlannerEngine {
                 symbolName: item.suggestedIcon,
                 tintToken: item.tintToken,
                 notes: item.notes,
+                isAllDay: false,
                 protectedCategory: item.protectedCategory,
                 isCompleted: item.isCompleted,
                 status: item.isCompleted ? .complete : .upcoming,
@@ -335,6 +339,7 @@ struct PlannerEngine {
                 symbolName: block.symbolName,
                 tintToken: block.tintToken,
                 notes: block.notes,
+                isAllDay: block.isAllDay,
                 protectedCategory: block.protectedCategory,
                 isCompleted: block.isCompleted,
                 status: assessment.status,
@@ -443,6 +448,7 @@ struct PlannerEngine {
             symbolName: symbol,
             tintToken: tintToken,
             notes: "",
+            isAllDay: false,
             protectedCategory: category,
             isCompleted: false,
             status: .protectedTime,
@@ -478,6 +484,7 @@ struct PlannerEngine {
                 symbolName: icon.symbolName,
                 tintToken: icon.tintToken,
                 notes: event.notes,
+                isAllDay: event.isAllDay,
                 protectedCategory: nil,
                 isCompleted: false,
                 status: .upcoming,
@@ -609,6 +616,7 @@ struct PlannerEngine {
             symbolName: block.symbolName,
             tintToken: block.tintToken,
             notes: block.notes,
+            isAllDay: block.isAllDay,
             protectedCategory: block.protectedCategory,
             isCompleted: block.isCompleted,
             status: block.status,
