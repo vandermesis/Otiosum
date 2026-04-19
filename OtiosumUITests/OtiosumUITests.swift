@@ -6,32 +6,61 @@ final class OtiosumUITests: XCTestCase {
     }
 
     @MainActor
-    func testTabsAndNowQuickAdd() throws {
+    func testQuickAddKeepsKeyboardActiveForMultipleLetters() throws {
         let app = launchApp()
-
-        XCTAssertTrue(app.tabBars.buttons["Now"].waitForExistence(timeout: 2))
-        XCTAssertTrue(app.tabBars.buttons["Future"].exists)
-        XCTAssertTrue(app.tabBars.buttons["Settings"].exists)
 
         let quickField = app.textFields["Quick add"]
         XCTAssertTrue(quickField.waitForExistence(timeout: 2))
 
         quickField.tap()
-        quickField.typeText("nap")
-        app.buttons["now-quick-add-button"].tap()
+        quickField.typeText("abc")
 
-        XCTAssertTrue(app.tabBars.buttons["Now"].exists)
+        XCTAssertTrue(app.keyboards.firstMatch.exists)
+        let value = quickField.value as? String
+        XCTAssertEqual(value, "abc")
     }
 
     @MainActor
-    func testQuickAddStartTimePickerFlow() throws {
+    func testAddToTimelineShowsPlacementMode() throws {
         let app = launchApp()
 
-        let startButton = app.buttons["now-quick-start-time-button"]
-        XCTAssertTrue(startButton.waitForExistence(timeout: 2))
-        startButton.tap()
+        let quickField = app.textFields["Quick add"]
+        XCTAssertTrue(quickField.waitForExistence(timeout: 2))
+        quickField.tap()
+        quickField.typeText("focus sprint\n")
 
-        XCTAssertTrue(app.buttons["now-quick-add-button"].exists)
+        XCTAssertTrue(app.buttons["timeline-draft-confirm"].waitForExistence(timeout: 3))
+    }
+
+    @MainActor
+    func testQuickAddToSomedayClearsInputAndDoesNotEnterPlacementMode() throws {
+        let app = launchApp()
+
+        let quickField = app.textFields["Quick add"]
+        XCTAssertTrue(quickField.waitForExistence(timeout: 2))
+        quickField.tap()
+        quickField.typeText("someday writing")
+
+        if app.keyboards.firstMatch.exists {
+            app.navigationBars.firstMatch.tap()
+        }
+        app.buttons["now-someday-sheet-button"].tap()
+
+        XCTAssertFalse(app.buttons["timeline-draft-confirm"].exists)
+        let value = quickField.value as? String
+        XCTAssertEqual(value, "Quick add")
+    }
+
+    @MainActor
+    func testSettingsAccessFromToolbar() throws {
+        let app = launchApp()
+
+        let settingsButton = app.buttons["now-open-settings"]
+        XCTAssertTrue(settingsButton.waitForExistence(timeout: 2))
+        settingsButton.tap()
+
+        XCTAssertTrue(app.staticTexts["Healthy rhythm"].waitForExistence(timeout: 2))
+        app.buttons["Done"].tap()
     }
 
     @MainActor
@@ -44,23 +73,9 @@ final class OtiosumUITests: XCTestCase {
 
         let markDoneButton = app.descendants(matching: .any)["timeline-task-done-\(taskIdentifier)"]
         XCTAssertTrue(markDoneButton.waitForExistence(timeout: 10))
-        markDoneButton.tap()
+        markDoneButton.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
 
         XCTAssertTrue(taskElement.exists)
-    }
-
-    @MainActor
-    func testSomedayDrawerAddsItemToNowTimeline() throws {
-        let app = launchApp()
-
-        let somedayButton = app.buttons["now-someday-sheet-button"]
-        XCTAssertTrue(somedayButton.waitForExistence(timeout: 2))
-        somedayButton.tap()
-
-        XCTAssertTrue(app.navigationBars["Someday"].waitForExistence(timeout: 2))
-        app.buttons["Done"].tap()
-
-        XCTAssertTrue(app.tabBars.buttons["Now"].exists)
     }
 
     @MainActor

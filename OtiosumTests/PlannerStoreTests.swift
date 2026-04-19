@@ -217,6 +217,62 @@ struct PlannerStoreTests {
         #expect(item.isInJar == false)
     }
 
+    @Test("Beginning timeline draft from quick add does not persist item")
+    func beginTimelineDraftDoesNotPersist() throws {
+        let modelContext = try makeModelContext()
+        let store = PlannerStore()
+        try store.ensureSeedData(in: modelContext)
+
+        store.todayQuickCapture = "plan launch"
+        let day = Date(timeIntervalSinceReferenceDate: 150_000)
+        store.beginTimelineDraft(fromQuickAdd: .today, on: day, template: .default)
+
+        let items = try modelContext.fetch(FetchDescriptor<PlannableItem>())
+        #expect(items.isEmpty)
+        #expect(store.timelineDraft != nil)
+        #expect(store.timelineDraft?.title == "Plan launch")
+    }
+
+    @Test("Confirming timeline draft persists item at chosen start")
+    func confirmTimelineDraftPersistsItem() throws {
+        let modelContext = try makeModelContext()
+        let store = PlannerStore()
+        try store.ensureSeedData(in: modelContext)
+
+        let day = Date(timeIntervalSinceReferenceDate: 160_000)
+        store.todayQuickCapture = "focus block"
+        store.beginTimelineDraft(fromQuickAdd: .today, on: day, template: .default)
+        let start = day.addingTimeInterval(14 * 60 * 60)
+        store.updateTimelineDraftStart(start)
+
+        store.confirmTimelineDraft(modelContext: modelContext)
+
+        let items = try modelContext.fetch(FetchDescriptor<PlannableItem>())
+        let item = try #require(items.first)
+        #expect(item.title == "Focus block")
+        #expect(item.scheduledDay == Calendar.current.startOfDay(for: start))
+        #expect(item.preferredStartMinutes == start.minutesSinceStartOfDay(using: .current))
+        #expect(store.timelineDraft == nil)
+        #expect(store.todayQuickCapture.isEmpty)
+    }
+
+    @Test("Adding quick item to someday creates jar item from today input")
+    func addQuickItemToSomedayFromTodayInput() throws {
+        let modelContext = try makeModelContext()
+        let store = PlannerStore()
+        try store.ensureSeedData(in: modelContext)
+
+        store.todayQuickCapture = "someday maybe"
+        store.addQuickItemToSomeday(modelContext: modelContext)
+
+        let items = try modelContext.fetch(FetchDescriptor<PlannableItem>())
+        let item = try #require(items.first)
+        #expect(item.title == "Someday maybe")
+        #expect(item.isInJar)
+        #expect(item.scheduledDay == nil)
+        #expect(store.todayQuickCapture.isEmpty)
+    }
+
     @Test("Refresh prompts picks the first overflow and first shift proposal")
     func refreshPromptsSelectsFirstEntries() throws {
         let store = PlannerStore()

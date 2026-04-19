@@ -385,6 +385,15 @@ struct InferenceAssessment: Equatable, Sendable {
     let confidence: Double
 }
 
+struct TimelineDraftTask: Equatable, Sendable {
+    let sourceContext: QuickCaptureContext
+    let title: String
+    let kind: PlannerItemKind
+    let symbolName: String
+    let tintToken: String
+    var startDate: Date
+}
+
 extension Date {
     func startOfDay(using calendar: Calendar) -> Date {
         calendar.startOfDay(for: self)

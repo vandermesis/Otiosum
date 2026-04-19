@@ -10,6 +10,7 @@ final class PlannerStore {
     var todayQuickCapture: String = ""
     var todayQuickStartMinutes: Int?
     var jarQuickCapture: String = ""
+    var timelineDraft: TimelineDraftTask?
     var pendingOverflow: PendingOverflowState?
     var pendingCalendarShift: PendingCalendarShiftState?
     var lastUserInteraction: Date?
@@ -109,6 +110,111 @@ final class PlannerStore {
         item.preferredStartMinutes = lane.timeWindow.startMinutes
         item.forceAfterBedtime = false
         try? modelContext.save()
+    }
+
+    func beginTimelineDraft(
+        fromQuickAdd context: QuickCaptureContext,
+        on day: Date,
+        template: DayTemplateSnapshot
+    ) {
+        let rawTitle: String
+        switch context {
+        case .today:
+            rawTitle = todayQuickCapture
+        case .jar:
+            rawTitle = jarQuickCapture
+        }
+
+        let title = rawTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard title.isEmpty == false else { return }
+
+        let icon = IconSuggester.suggest(for: title)
+        let dayStart = Calendar.current.startOfDay(for: day)
+        _ = template
+        let nowMinutes = Date.now.minutesSinceStartOfDay(using: .current)
+        let startMinutes = ((nowMinutes + 2) / 5) * 5
+        let startDate = Calendar.current.date(on: dayStart, minutesFromStartOfDay: startMinutes)
+
+        timelineDraft = TimelineDraftTask(
+            sourceContext: context,
+            title: title.capitalizedSentence,
+            kind: title.lowercased().contains("idea") ? .idea : .task,
+            symbolName: icon.symbolName,
+            tintToken: icon.tintToken,
+            startDate: startDate
+        )
+    }
+
+    func updateTimelineDraftStart(_ start: Date) {
+        guard timelineDraft != nil else { return }
+        timelineDraft?.startDate = start
+    }
+
+    func cancelTimelineDraft() {
+        timelineDraft = nil
+    }
+
+    func confirmTimelineDraft(modelContext: ModelContext) {
+        guard let draft = timelineDraft else { return }
+        let calendar = Calendar.current
+        let scheduledDay = calendar.startOfDay(for: draft.startDate)
+        let preferredStartMinutes = max(0, min(23 * 60 + 55, draft.startDate.minutesSinceStartOfDay(using: calendar)))
+
+        let item = PlannableItem(
+            title: draft.title,
+            kind: draft.kind,
+            source: .local,
+            suggestedIcon: draft.symbolName,
+            tintToken: draft.tintToken,
+            targetDurationMinutes: 30,
+            minimumDurationMinutes: 15,
+            scheduledDay: scheduledDay,
+            preferredStartMinutes: preferredStartMinutes,
+            preferredTimeWindow: inferredWindow(for: draft.startDate),
+            flexibility: .flexible,
+            notes: "",
+            isCompleted: false,
+            isInJar: false
+        )
+
+        modelContext.insert(item)
+        try? modelContext.save()
+
+        switch draft.sourceContext {
+        case .today:
+            todayQuickCapture = ""
+        case .jar:
+            jarQuickCapture = ""
+        }
+
+        timelineDraft = nil
+    }
+
+    func addQuickItemToSomeday(modelContext: ModelContext) {
+        let title = todayQuickCapture.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard title.isEmpty == false else { return }
+
+        let icon = IconSuggester.suggest(for: title)
+        let item = PlannableItem(
+            title: title.capitalizedSentence,
+            kind: title.lowercased().contains("idea") ? .idea : .task,
+            source: .local,
+            suggestedIcon: icon.symbolName,
+            tintToken: icon.tintToken,
+            targetDurationMinutes: 30,
+            minimumDurationMinutes: 15,
+            scheduledDay: nil,
+            preferredStartMinutes: nil,
+            preferredTimeWindow: .anytime,
+            flexibility: .flexible,
+            notes: "",
+            isCompleted: false,
+            isInJar: true
+        )
+
+        modelContext.insert(item)
+        try? modelContext.save()
+        todayQuickCapture = ""
     }
 
     func moveItemLater(

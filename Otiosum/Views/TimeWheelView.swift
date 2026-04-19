@@ -9,10 +9,12 @@ struct TimeWheelView: View {
     let currentBlockID: UUID?
     let nextBlockID: UUID?
     let showsHeader: Bool
+    let timelineDraft: TimelineDraftTask?
     let onDropSomedayItem: ((UUID, Date) -> Bool)?
     let onRescheduleBlock: ((PlannedBlock, Date) -> Void)?
     let onAdjustBlockDuration: ((PlannedBlock, Int) -> Void)?
     let onQuickAction: ((PlannedBlock, TimelineQuickAction) -> Void)?
+    let onTimelineDraftMoved: ((Date) -> Void)?
 
     @State private var scrollAnchorDate: Date?
     @State private var dragState: TimelineDragState?
@@ -33,10 +35,12 @@ struct TimeWheelView: View {
         currentBlockID: UUID? = nil,
         nextBlockID: UUID? = nil,
         showsHeader: Bool = true,
+        timelineDraft: TimelineDraftTask? = nil,
         onDropSomedayItem: ((UUID, Date) -> Bool)? = nil,
         onRescheduleBlock: ((PlannedBlock, Date) -> Void)? = nil,
         onAdjustBlockDuration: ((PlannedBlock, Int) -> Void)? = nil,
-        onQuickAction: ((PlannedBlock, TimelineQuickAction) -> Void)? = nil
+        onQuickAction: ((PlannedBlock, TimelineQuickAction) -> Void)? = nil,
+        onTimelineDraftMoved: ((Date) -> Void)? = nil
     ) {
         self.day = day
         self.blocks = blocks
@@ -44,10 +48,12 @@ struct TimeWheelView: View {
         self.currentBlockID = currentBlockID
         self.nextBlockID = nextBlockID
         self.showsHeader = showsHeader
+        self.timelineDraft = timelineDraft
         self.onDropSomedayItem = onDropSomedayItem
         self.onRescheduleBlock = onRescheduleBlock
         self.onAdjustBlockDuration = onAdjustBlockDuration
         self.onQuickAction = onQuickAction
+        self.onTimelineDraftMoved = onTimelineDraftMoved
     }
 
     var body: some View {
@@ -73,6 +79,7 @@ struct TimeWheelView: View {
                             showsHeader: showsHeader,
                             calendar: calendar,
                             dragState: dragState,
+                            timelineDraft: timelineDraft,
                             onDropSomedayItem: { itemID, date in
                                 let didHandle = onDropSomedayItem?(itemID, roundedDate(date, stepMinutes: slotMinutes)) ?? false
                                 if didHandle == false {
@@ -91,6 +98,9 @@ struct TimeWheelView: View {
                             },
                             onQuickAction: { block, action in
                                 handleQuickAction(for: block, action: action)
+                            },
+                            onTimelineDraftMoved: { proposedStart in
+                                onTimelineDraftMoved?(roundedDate(proposedStart, stepMinutes: slotMinutes))
                             }
                         )
                     }
@@ -289,11 +299,13 @@ private struct TimelineCanvasView: View {
     let showsHeader: Bool
     let calendar: Calendar
     let dragState: TimelineDragState?
+    let timelineDraft: TimelineDraftTask?
     let onDropSomedayItem: (UUID, Date) -> Bool
     let onDragChanged: (PlannedBlock, Date) -> Void
     let onDragEnded: (PlannedBlock) -> Void
     let onAdjustDuration: (PlannedBlock, Int) -> Void
     let onQuickAction: (PlannedBlock, TimelineQuickAction) -> Void
+    let onTimelineDraftMoved: (Date) -> Void
 
     private var slots: [Date] {
         strideDates(from: range.lowerBound, through: range.upperBound, everyMinutes: slotMinutes)
@@ -392,6 +404,20 @@ private struct TimelineCanvasView: View {
 
                     ForEach(blocks) { block in
                         blockLayer(for: block)
+                    }
+
+                    if let timelineDraft {
+                        TimelineDraftGhostCapsule(
+                            draft: timelineDraft,
+                            width: laneWidth,
+                            pointsPerMinute: pointsPerMinute,
+                            onMoveByMinutes: { deltaMinutes in
+                                let proposed = timelineDraft.startDate.addingTimeInterval(TimeInterval(deltaMinutes * 60))
+                                onTimelineDraftMoved(snappedDate(proposed))
+                            }
+                        )
+                        .offset(x: 96, y: yOffset(for: timelineDraft.startDate))
+                        .frame(height: 66, alignment: .top)
                     }
 
                     TimelineNowMarker()
@@ -495,6 +521,11 @@ private struct TimelineCanvasView: View {
         let y = max(location.y - (showsHeader ? 52 : 0), 0)
         let minutes = Double(y / pointsPerMinute)
         let raw = range.lowerBound.addingTimeInterval(minutes * 60)
+        return snappedDate(raw)
+    }
+
+    private func snappedDate(_ date: Date) -> Date {
+        let raw = min(max(date, range.lowerBound), range.upperBound)
         let snappedMinute = (calendar.component(.minute, from: raw) / slotMinutes) * slotMinutes
         var snapped = calendar.date(bySetting: .minute, value: snappedMinute, of: raw) ?? raw
         snapped = calendar.date(bySetting: .second, value: 0, of: snapped) ?? snapped
@@ -548,7 +579,7 @@ private struct TimelineTickRow: View {
                 .frame(width: 72, alignment: .trailing)
 
             Rectangle()
-                .fill(.primary.opacity(style.lineOpacity))
+                .fill(lineColor.opacity(style.lineOpacity))
                 .frame(height: style.lineThickness)
 
             Spacer(minLength: 0)
@@ -571,8 +602,27 @@ private struct TimelineTickRow: View {
     private var labelColor: Color {
         switch style.tier {
         case .month, .day:
+            .indigo
+        case .hour:
             .primary
-        case .hour, .quarterHour, .minor:
+        case .quarterHour:
+            .blue
+        case .minor:
+            .secondary
+        }
+    }
+
+    private var lineColor: Color {
+        switch style.tier {
+        case .month:
+            .teal
+        case .day:
+            .indigo
+        case .hour:
+            .primary
+        case .quarterHour:
+            .blue
+        case .minor:
             .secondary
         }
     }
@@ -618,8 +668,10 @@ private struct TimelineTaskCapsule: View {
                             } label: {
                                 Image(systemName: "arrow.uturn.backward.circle.fill")
                                     .font(.caption)
+                                    .frame(width: 28, height: 28)
                             }
                             .buttonStyle(.plain)
+                            .contentShape(.rect)
                             .accessibilityIdentifier("timeline-task-undo-\(block.title.testingIdentifier)")
                         } else {
                             Button {
@@ -627,8 +679,10 @@ private struct TimelineTaskCapsule: View {
                             } label: {
                                 Image(systemName: "play.circle.fill")
                                     .font(.caption)
+                                    .frame(width: 28, height: 28)
                             }
                             .buttonStyle(.plain)
+                            .contentShape(.rect)
                             .accessibilityIdentifier("timeline-task-start-\(block.title.testingIdentifier)")
 
                             Button {
@@ -636,8 +690,10 @@ private struct TimelineTaskCapsule: View {
                             } label: {
                                 Image(systemName: "checkmark.circle.fill")
                                     .font(.caption)
+                                    .frame(width: 28, height: 28)
                             }
                             .buttonStyle(.plain)
+                            .contentShape(.rect)
                             .accessibilityIdentifier("timeline-task-done-\(block.title.testingIdentifier)")
                         }
                     }
@@ -868,6 +924,52 @@ private struct TimelineDragGhostCapsule: View {
                     .fill((isInvalid ? Color.red : .white).opacity(0.22))
             )
             .allowsHitTesting(false)
+    }
+}
+
+private struct TimelineDraftGhostCapsule: View {
+    let draft: TimelineDraftTask
+    let width: CGFloat
+    let pointsPerMinute: CGFloat
+    let onMoveByMinutes: (Int) -> Void
+
+    @GestureState private var dragOffset: CGSize = .zero
+
+    var body: some View {
+        HStack(spacing: 8) {
+            PlannerIcon(symbolName: draft.symbolName, tintToken: draft.tintToken, compact: true)
+            Text(draft.title)
+                .font(.subheadline)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Image(systemName: "sparkles")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .frame(width: width, height: 64, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color.blue.opacity(0.15))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(style: StrokeStyle(lineWidth: 1.2, dash: [6, 4]))
+                .foregroundStyle(Color.blue.opacity(0.7))
+        )
+        .offset(y: dragOffset.height)
+        .gesture(
+            DragGesture(minimumDistance: 2)
+                .updating($dragOffset) { value, state, _ in
+                    state = value.translation
+                }
+                .onEnded { value in
+                    let deltaMinutes = Int((value.translation.height / pointsPerMinute).rounded())
+                    onMoveByMinutes(deltaMinutes)
+                }
+        )
+        .accessibilityIdentifier("timeline-draft-ghost")
     }
 }
 

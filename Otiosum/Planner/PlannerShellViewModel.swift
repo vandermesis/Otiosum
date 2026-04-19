@@ -25,6 +25,11 @@ final class PlannerShellViewModel {
         set { store.todayQuickStartMinutes = newValue }
     }
 
+    var timelineDraft: TimelineDraftTask? {
+        get { store.timelineDraft }
+        set { store.timelineDraft = newValue }
+    }
+
     var jarQuickCapture: String {
         get { store.jarQuickCapture }
         set { store.jarQuickCapture = newValue }
@@ -139,6 +144,30 @@ final class PlannerShellViewModel {
             day: selectedDay,
             template: template
         )
+    }
+
+    func beginTimelineDraft(from context: QuickCaptureContext, template: DayTemplateSnapshot) {
+        registerInteraction()
+        store.beginTimelineDraft(fromQuickAdd: context, on: selectedDay, template: template)
+    }
+
+    func updateTimelineDraftStart(_ start: Date) {
+        registerInteraction()
+        store.updateTimelineDraftStart(start)
+    }
+
+    func confirmTimelineDraft(modelContext: ModelContext) {
+        registerInteraction()
+        store.confirmTimelineDraft(modelContext: modelContext)
+    }
+
+    func cancelTimelineDraft() {
+        store.cancelTimelineDraft()
+    }
+
+    func addQuickItemToSomeday(modelContext: ModelContext) {
+        registerInteraction()
+        store.addQuickItemToSomeday(modelContext: modelContext)
     }
 
     func scheduleJarItem(
