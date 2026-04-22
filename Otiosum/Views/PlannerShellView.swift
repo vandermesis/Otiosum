@@ -339,3 +339,8 @@ private struct QuickCaptureField: View {
         }
     }
 }
+
+#Preview {
+    PlannerShellView()
+        .modelContainer(AppConfiguration.makeModelContainer())
+}

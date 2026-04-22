@@ -14,7 +14,7 @@ struct OtiosumApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            PlannerShellView()
         }
         .modelContainer(sharedModelContainer)
     }
