@@ -14,6 +14,7 @@ struct PlannerShellView: View {
     @State private var isSomedaySheetPresented = false
     @State private var isSettingsPresented = false
     @State private var timelineCenterDate = Date.now
+    @FocusState private var isQuickCaptureFocused: Bool
 
     private var template: DayTemplate? { templates.first }
     private var budget: DailyBudget? { budgets.first }
@@ -57,6 +58,12 @@ struct PlannerShellView: View {
                         plan: selectedDayPlan,
                         budget: budgetSnapshot,
                         calendarService: viewModel.calendarService,
+                        onOpenArchive: {
+                            isSomedaySheetPresented = true
+                        },
+                        onOpenSettings: {
+                            isSettingsPresented = true
+                        },
                         onRequestCalendarAccess: {
                             Task {
                                 await viewModel.requestCalendarAccess()
@@ -111,33 +118,32 @@ struct PlannerShellView: View {
                             timelineCenterDate = centerDate
                         }
                     )
-                    .toolbar {
-                        ToolbarItemGroup(placement: .topBarTrailing) {
-                            Button("Archive", systemImage: "archivebox") {
-                                isSomedaySheetPresented = true
-                            }
-                            .accessibilityIdentifier("now-open-someday")
-
-                            Button("Settings", systemImage: "gearshape") {
-                                isSettingsPresented = true
-                            }
-                            .accessibilityIdentifier("now-open-settings")
-                        }
-                        ToolbarItemGroup(placement: .bottomBar) {
-                            QuickCaptureToolbarContent(
-                                text: todayQuickCaptureBinding,
-                                suggestion: todayQuickCaptureSuggestion,
-                                onAddToToday: {
-                                    addSearchTextToTimeline(
-                                        templateSnapshot: templateSnapshot,
-                                        budgetSnapshot: budgetSnapshot
-                                    )
-                                },
-                                onAddToArchive: {
-                                    addSearchTextToArchiveIfNeeded()
-                                }
+                    .toolbar(.hidden, for: .navigationBar)
+                }
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    QuickCaptureToolbarContent(
+                        text: todayQuickCaptureBinding,
+                        isTextFieldFocused: $isQuickCaptureFocused,
+                        suggestion: todayQuickCaptureSuggestion,
+                        onAddToToday: {
+                            isQuickCaptureFocused = false
+                            addSearchTextToTimeline(
+                                templateSnapshot: templateSnapshot,
+                                budgetSnapshot: budgetSnapshot
                             )
+                        },
+                        onAddToArchive: {
+                            isQuickCaptureFocused = false
+                            addSearchTextToArchiveIfNeeded()
                         }
+                    )
+                    .padding(.horizontal, 18)
+                    .padding(.top, 12)
+                    .padding(.bottom, 10)
+                    .frame(maxWidth: .infinity)
+                    .background(.regularMaterial, ignoresSafeAreaEdges: .bottom)
+                    .overlay(alignment: .top) {
+                        Divider()
                     }
                 }
             }
@@ -261,6 +267,7 @@ struct PlannerShellView: View {
 
 private struct QuickCaptureToolbarContent: View {
     @Binding var text: String
+    let isTextFieldFocused: FocusState<Bool>.Binding
     let suggestion: IconSuggestion?
     let onAddToToday: () -> Void
     let onAddToArchive: () -> Void
@@ -270,28 +277,65 @@ private struct QuickCaptureToolbarContent: View {
     }
 
     var body: some View {
-        HStack(spacing: 12) {
-            TextField("Add", text: $text)
+        VStack(spacing: 10) {
+            HStack(spacing: 10) {
+                QuickCaptureField(
+                    text: $text,
+                    isTextFieldFocused: isTextFieldFocused,
+                    suggestion: suggestion,
+                    onSubmit: onAddToToday
+                )
+
+                Button("Add", systemImage: "plus") {
+                    onAddToToday()
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(hasText == false)
+                .controlSize(.large)
+                .accessibilityIdentifier("quick-add-today")
+            }
+
+            Button("Archive for later", systemImage: "archivebox") {
+                onAddToArchive()
+            }
+            .buttonStyle(.bordered)
+            .disabled(hasText == false)
+            .frame(maxWidth: .infinity, alignment: .trailing)
+            .accessibilityIdentifier("quick-add-someday")
+        }
+    }
+}
+
+private struct QuickCaptureField: View {
+    @Binding var text: String
+    let isTextFieldFocused: FocusState<Bool>.Binding
+    let suggestion: IconSuggestion?
+    let onSubmit: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "text.badge.plus")
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+
+            TextField("Add something to today", text: $text)
+                .focused(isTextFieldFocused)
                 .submitLabel(.done)
-                .onSubmit(onAddToToday)
+                .onSubmit(onSubmit)
                 .accessibilityIdentifier("quick-add-field")
 
             if let suggestion {
                 PlannerIcon(symbolName: suggestion.symbolName, tintToken: suggestion.tintToken, compact: true)
                     .accessibilityLabel(Text("Suggested icon"))
             }
-
-            Button("Add", systemImage: "plus") {
-                onAddToToday()
-            }
-            .disabled(hasText == false)
-            .accessibilityIdentifier("quick-add-today")
-
-            Button("Archive", systemImage: "archivebox") {
-                onAddToArchive()
-            }
-            .disabled(hasText == false)
-            .accessibilityIdentifier("quick-add-someday")
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .frame(minHeight: 52)
+        .background(.background.opacity(0.78), in: Capsule())
+        .overlay {
+            Capsule()
+                .strokeBorder(.separator.opacity(0.35), lineWidth: 1)
         }
     }
 }

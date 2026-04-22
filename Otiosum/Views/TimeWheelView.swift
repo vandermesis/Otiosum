@@ -1,5 +1,14 @@
 import SwiftUI
 
+private enum TimelineLayoutMetrics {
+    static let labelColumnWidth: CGFloat = 54
+    static let laneLeadingInset: CGFloat = 60
+    static let laneTrailingInset: CGFloat = 10
+    static let scaleToLaneSpacing: CGFloat = 1
+    static let readHeadWidth: CGFloat = 170
+    static let readHeadLeadingInset: CGFloat = 4
+}
+
 struct TimeWheelView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -59,7 +68,10 @@ struct TimeWheelView: View {
             let range = timelineRange(reference: now)
 
             GeometryReader { proxy in
-                let laneWidth = max(proxy.size.width - 124, 180)
+                let laneWidth = max(
+                    proxy.size.width - TimelineLayoutMetrics.laneLeadingInset - TimelineLayoutMetrics.laneTrailingInset,
+                    180
+                )
 
                 ZStack(alignment: .bottomTrailing) {
                     ScrollView(.vertical) {
@@ -122,7 +134,10 @@ struct TimeWheelView: View {
                     }
                 }
                 .overlay(alignment: .center) {
-                    TimelineCenterNowLine(date: scrollAnchorDate ?? now)
+                    TimelineCenterNowLine(
+                        date: scrollAnchorDate ?? now,
+                        allDayTitles: centeredAllDayTitles(for: scrollAnchorDate ?? now)
+                    )
                 }
                 .onAppear {
                     jumpToNow(using: now)
@@ -154,6 +169,22 @@ struct TimeWheelView: View {
         blocks.filter { block in
             block.end > range.lowerBound && block.start < range.upperBound
         }
+    }
+
+    private func centeredAllDayTitles(for date: Date) -> [String] {
+        let dayStart = calendar.startOfDay(for: date)
+        let nextDayStart = calendar.date(byAdding: .day, value: 1, to: dayStart) ?? dayStart
+
+        return blocks
+            .filter { block in
+                block.source == .calendar && block.isAllDay && block.end > dayStart && block.start < nextDayStart
+            }
+            .map(\.title)
+            .reduce(into: [String]()) { titles, title in
+                if titles.contains(title) == false {
+                    titles.append(title)
+                }
+            }
     }
 
     private func shouldShowBackToNow(for now: Date) -> Bool {
@@ -405,13 +436,13 @@ private struct TimelineCanvasView: View {
                 ZStack(alignment: .topLeading) {
                     ForEach(allDayBlocks) { block in
                         TimelineAllDayBackgroundBand(block: block, width: laneWidth)
-                            .offset(x: 96, y: yOffset(for: block.start))
+                            .offset(x: TimelineLayoutMetrics.laneLeadingInset, y: yOffset(for: block.start))
                             .frame(height: height(for: block), alignment: .top)
                     }
 
                     ForEach(gapItems) { gap in
                         TimelineGapCard(item: gap)
-                            .offset(x: 96, y: yOffset(for: gap.date))
+                            .offset(x: TimelineLayoutMetrics.laneLeadingInset, y: yOffset(for: gap.date))
                     }
 
                     ForEach(timedBlocks) { block in
@@ -423,14 +454,14 @@ private struct TimelineCanvasView: View {
                             date: dragState.proposedStart,
                             conflictTitle: dragState.conflictingBlockTitle
                         )
-                        .offset(x: 96, y: yOffset(for: dragState.proposedStart) - 26)
+                        .offset(x: TimelineLayoutMetrics.laneLeadingInset, y: yOffset(for: dragState.proposedStart) - 26)
 
                         TimelineDragGhostCapsule(
                             width: laneWidth,
                             height: max(height(for: block), 44),
                             isInvalid: dragState.conflictingBlockTitle != nil
                         )
-                        .offset(x: 96, y: yOffset(for: dragState.proposedStart))
+                        .offset(x: TimelineLayoutMetrics.laneLeadingInset, y: yOffset(for: dragState.proposedStart))
                     }
                 }
             }
@@ -474,7 +505,7 @@ private struct TimelineCanvasView: View {
                 }
             )
             .opacity(0.35)
-            .offset(x: 96, y: yOffset(for: block.start))
+            .offset(x: TimelineLayoutMetrics.laneLeadingInset, y: yOffset(for: block.start))
         } else {
             TimelineTaskCapsule(
                 block: block,
@@ -498,7 +529,7 @@ private struct TimelineCanvasView: View {
                     onQuickAction(block, action)
                 }
             )
-            .offset(x: 96, y: yOffset(for: block.start))
+            .offset(x: TimelineLayoutMetrics.laneLeadingInset, y: yOffset(for: block.start))
         }
     }
 
@@ -567,11 +598,32 @@ private struct TimelineTickRow: View {
     let slotHeight: CGFloat
 
     var body: some View {
-        HStack(spacing: 10) {
-            Text(style.label)
-                .font(labelFont)
-                .foregroundStyle(labelColor)
-                .frame(width: 72, alignment: .trailing)
+        HStack(spacing: TimelineLayoutMetrics.scaleToLaneSpacing) {
+            VStack(alignment: .trailing, spacing: 0) {
+                if let contextLabel = style.contextLabel {
+                    Text(contextLabel)
+                        .font(contextFont)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+
+                if style.label.isEmpty {
+                    Rectangle()
+                        .fill(labelColor.opacity(0.75))
+                        .frame(width: 8, height: max(style.lineThickness, 1))
+                        .padding(.top, contextLabelTopPadding)
+                } else {
+                    Text(style.label)
+                        .font(timeFont)
+                        .monospacedDigit()
+                        .foregroundStyle(labelColor)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                        .allowsTightening(true)
+                }
+            }
+            .frame(width: TimelineLayoutMetrics.labelColumnWidth, alignment: .trailing)
+            .fixedSize(horizontal: false, vertical: true)
 
             Rectangle()
                 .fill(lineColor.opacity(style.lineOpacity))
@@ -583,41 +635,43 @@ private struct TimelineTickRow: View {
         .accessibilityHidden(true)
     }
 
-    private var labelFont: Font {
+    private var contextFont: Font {
+        .caption2
+    }
+
+    private var contextLabelTopPadding: CGFloat {
+        style.contextLabel == nil ? 0 : 2
+    }
+
+    private var timeFont: Font {
         switch style.tier {
         case .month, .day:
             .caption.bold()
         case .hour:
+            .caption.bold()
+        case .quarterHour:
             .caption
-        case .quarterHour, .minor:
+        case .minor:
             .caption2
         }
     }
 
     private var labelColor: Color {
         switch style.tier {
-        case .month, .day:
-            .indigo
-        case .hour:
+        case .month, .day, .hour:
             .primary
         case .quarterHour:
-            .blue
-        case .minor:
             .secondary
+        case .minor:
+            .secondary.opacity(0.7)
         }
     }
 
     private var lineColor: Color {
         switch style.tier {
-        case .month:
-            .teal
-        case .day:
-            .indigo
-        case .hour:
+        case .month, .day, .hour:
             .primary
-        case .quarterHour:
-            .blue
-        case .minor:
+        case .quarterHour, .minor:
             .secondary
         }
     }
@@ -868,28 +922,111 @@ private struct TimelineTag: View {
 
 private struct TimelineCenterNowLine: View {
     let date: Date
+    let allDayTitles: [String]
 
     var body: some View {
-        HStack(spacing: 8) {
-            Text(date.formatted(.dateTime.weekday(.abbreviated).hour().minute()))
-                .font(.caption.bold())
-                .padding(.horizontal, 8)
-                .padding(.vertical, 6)
-                .background(Color.white.opacity(0.92), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .strokeBorder(Color.red.opacity(0.35), lineWidth: 1)
-                )
-                .frame(width: 84, alignment: .trailing)
+        Color.clear
+            .frame(height: allDaySummary == nil ? 96 : 120)
+            .overlay(alignment: .center) {
+                Rectangle()
+                    .fill(markerLineColor)
+                    .frame(height: 1.5)
+            }
+            .overlay(alignment: .leading) {
+                readHead
+                    .padding(.leading, TimelineLayoutMetrics.readHeadLeadingInset)
+                    .alignmentGuide(VerticalAlignment.center) { dimensions in
+                        dimensions[VerticalAlignment.bottom]
+                    }
+            }
+            .padding(.horizontal, 8)
+            .allowsHitTesting(false)
+            .accessibilityLabel("Timeline center")
+            .accessibilityValue(accessibilityValue)
+    }
 
-            Rectangle()
-                .fill(Color.red.opacity(0.6))
-                .frame(height: 1.5)
+    private var readHead: some View {
+        VStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(date.formatted(date: .numeric, time: .omitted))
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+
+                Text(date.formatted(date: .omitted, time: .shortened))
+                    .font(.title3)
+                    .monospacedDigit()
+                    .bold()
+                    .lineLimit(1)
+
+                if let allDaySummary {
+                    Divider()
+
+                    HStack(spacing: 6) {
+                        Text("All day")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+
+                        Text(allDaySummary)
+                            .font(.caption)
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.top, 14)
+            .padding(.bottom, allDaySummary == nil ? 12 : 14)
+            .frame(width: TimelineLayoutMetrics.readHeadWidth, alignment: .leading)
+            .background(.background, in: .rect(cornerRadius: 16))
+            .overlay {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .strokeBorder(Color.primary.opacity(0.16), lineWidth: 1)
+            }
+            .overlay(alignment: .top) {
+                RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                    .fill(Color.primary.opacity(0.08))
+                    .frame(height: 3)
+                    .padding(.horizontal, 14)
+                    .padding(.top, 7)
+            }
+            .shadow(color: .black.opacity(0.04), radius: 3, y: 1)
+
+            RoundedRectangle(cornerRadius: 2, style: .continuous)
+                .fill(pointerColor)
+                .frame(width: 4, height: 13)
         }
-        .padding(.horizontal, 8)
-        .allowsHitTesting(false)
-        .accessibilityLabel("Timeline center")
-        .accessibilityValue(date.formatted(.dateTime.weekday(.abbreviated).hour().minute()))
+    }
+
+    private var markerLineColor: Color {
+        Color.red.opacity(0.24)
+    }
+
+    private var pointerColor: Color {
+        Color.red.opacity(0.38)
+    }
+
+    private var allDaySummary: String? {
+        guard let firstTitle = allDayTitles.first else { return nil }
+        let extraCount = allDayTitles.count - 1
+
+        if extraCount > 0 {
+            return "\(firstTitle) +\(extraCount)"
+        }
+
+        return firstTitle
+    }
+
+    private var accessibilityValue: String {
+        let formattedDate = date.formatted(date: .numeric, time: .shortened)
+
+        guard allDayTitles.isEmpty == false else {
+            return formattedDate
+        }
+
+        return "\(formattedDate). All day events: \(allDayTitles.joined(separator: ", "))"
     }
 }
 

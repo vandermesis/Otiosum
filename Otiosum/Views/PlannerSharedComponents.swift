@@ -344,17 +344,69 @@ struct PlannerMessageCard: View {
     let action: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .center, spacing: 14) {
+                PlannerMessageIcon()
+                PlannerMessageText(title: title, message: message)
+                Spacer(minLength: 0)
+                PlannerMessageAction(title: actionTitle, action: action)
+            }
+
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .top, spacing: 14) {
+                    PlannerMessageIcon()
+                    PlannerMessageText(title: title, message: message)
+                }
+                PlannerMessageAction(title: actionTitle, action: action)
+            }
+        }
+        .padding(16)
+        .background(.background.opacity(0.74), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .strokeBorder(.white.opacity(0.55), lineWidth: 1)
+        }
+        .shadow(color: .black.opacity(0.08), radius: 12, y: 6)
+    }
+}
+
+private struct PlannerMessageIcon: View {
+    var body: some View {
+        Image(systemName: "calendar.badge.clock")
+            .font(.title3)
+            .foregroundStyle(.tint)
+            .frame(width: 44, height: 44)
+            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .accessibilityHidden(true)
+    }
+}
+
+private struct PlannerMessageText: View {
+    let title: String
+    let message: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
             Text(title)
                 .font(.headline)
             Text(message)
                 .font(.footnote)
                 .foregroundStyle(.secondary)
-            Button(actionTitle, action: action)
-                .buttonStyle(.borderedProminent)
+                .lineLimit(3)
         }
-        .padding(16)
-        .background(Color.white.opacity(0.78), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+    }
+}
+
+private struct PlannerMessageAction: View {
+    let title: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(title, systemImage: "link") {
+            action()
+        }
+        .buttonStyle(.borderedProminent)
+        .controlSize(.small)
     }
 }
 

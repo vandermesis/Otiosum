@@ -94,16 +94,22 @@ struct OtiosumTests {
         #expect(timelineGridTierIdentifier(style.tier) == expectedTier)
     }
 
-    @Test("Timeline grid labels major boundaries and keeps minor ticks unlabeled")
+    @Test("Timeline grid labels boundaries and quarter hours while minor rows stay as ticks")
     func timelineGridLabelRules() throws {
         let dayStart = try makeDate(year: 2026, month: 4, day: 3, hour: 0, minute: 0, second: 0)
+        let quarterHourTick = try makeDate(year: 2026, month: 4, day: 3, hour: 0, minute: 15, second: 0)
         let minorTick = try makeDate(year: 2026, month: 4, day: 3, hour: 0, minute: 5, second: 0)
 
         let dayStartStyle = TimelineGridStyle.make(for: dayStart, calendar: calendar)
+        let quarterHourStyle = TimelineGridStyle.make(for: quarterHourTick, calendar: calendar)
         let minorStyle = TimelineGridStyle.make(for: minorTick, calendar: calendar)
 
         #expect(dayStartStyle.label.isEmpty == false)
+        #expect(dayStartStyle.contextLabel != nil)
+        #expect(quarterHourStyle.label.isEmpty == false)
+        #expect(quarterHourStyle.contextLabel == nil)
         #expect(minorStyle.label.isEmpty)
+        #expect(minorStyle.contextLabel == nil)
     }
 
     private func makeDate(

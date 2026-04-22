@@ -27,6 +27,7 @@ enum TimelineGridTier {
 struct TimelineGridStyle {
     let tier: TimelineGridTier
     let label: String
+    let contextLabel: String?
     let lineOpacity: CGFloat
     let lineThickness: CGFloat
 
@@ -38,11 +39,13 @@ struct TimelineGridStyle {
         let minute = components.minute ?? 0
         let hour = components.hour ?? 0
         let day = components.day ?? 1
+        let timeLabel = date.formatted(.dateTime.hour(.defaultDigits(amPM: .omitted)).minute(.twoDigits))
 
         if day == 1, hour == 0, minute == 0 {
             return TimelineGridStyle(
                 tier: .month,
-                label: date.formatted(.dateTime.month(.abbreviated).day()),
+                label: timeLabel,
+                contextLabel: date.formatted(.dateTime.month(.abbreviated).day()),
                 lineOpacity: 0.32,
                 lineThickness: 1.2
             )
@@ -51,7 +54,8 @@ struct TimelineGridStyle {
         if hour == 0, minute == 0 {
             return TimelineGridStyle(
                 tier: .day,
-                label: date.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)),
+                label: timeLabel,
+                contextLabel: date.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)),
                 lineOpacity: 0.26,
                 lineThickness: 1.0
             )
@@ -60,7 +64,8 @@ struct TimelineGridStyle {
         if minute == 0 {
             return TimelineGridStyle(
                 tier: .hour,
-                label: date.formatted(.dateTime.hour(.defaultDigits(amPM: .abbreviated))),
+                label: timeLabel,
+                contextLabel: nil,
                 lineOpacity: 0.20,
                 lineThickness: 0.9
             )
@@ -69,7 +74,8 @@ struct TimelineGridStyle {
         if minute.isMultiple(of: 15) {
             return TimelineGridStyle(
                 tier: .quarterHour,
-                label: date.formatted(.dateTime.minute(.twoDigits)),
+                label: timeLabel,
+                contextLabel: nil,
                 lineOpacity: 0.12,
                 lineThickness: 0.7
             )
@@ -78,6 +84,7 @@ struct TimelineGridStyle {
         return TimelineGridStyle(
             tier: .minor,
             label: "",
+            contextLabel: nil,
             lineOpacity: 0.08,
             lineThickness: 0.5
         )
