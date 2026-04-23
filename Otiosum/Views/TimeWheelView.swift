@@ -122,22 +122,23 @@ struct TimeWheelView: View {
                             .transition(.move(edge: .top).combined(with: .opacity))
                     }
 
-                    if shouldShowBackToNow(for: now) {
-                        Button("Back to Now", systemImage: "scope") {
-                            jumpToNow(using: now)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .padding(.top, 12)
-                        .padding(.trailing, 12)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-                        .accessibilityHint("Centers the timeline around the current time")
-                    }
                 }
                 .overlay(alignment: .center) {
                     TimelineCenterNowLine(
-                        date: scrollAnchorDate ?? now,
-                        allDayTitles: centeredAllDayTitles(for: scrollAnchorDate ?? now)
+                        date: scrollAnchorDate ?? now
                     )
+                }
+                .overlay(alignment: .center) {
+                    if shouldShowBackToNow(for: now) {
+                        Button("Back to Now", systemImage: "magnifyingglass") {
+                            jumpToNow(using: now)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .labelStyle(.iconOnly)
+                        .controlSize(.small)
+                        .frame(width: 36, height: 36)
+                        .accessibilityHint("Centers the timeline around the current time")
+                    }
                 }
                 .onAppear {
                     jumpToNow(using: now)
@@ -922,21 +923,24 @@ private struct TimelineTag: View {
 
 private struct TimelineCenterNowLine: View {
     let date: Date
-    let allDayTitles: [String]
 
     var body: some View {
         Color.clear
-            .frame(height: allDaySummary == nil ? 96 : 120)
+            .frame(height: 44)
             .overlay(alignment: .center) {
                 Rectangle()
                     .fill(markerLineColor)
                     .frame(height: 1.5)
             }
-            .overlay(alignment: .leading) {
-                readHead
-                    .padding(.leading, TimelineLayoutMetrics.readHeadLeadingInset)
-                    .alignmentGuide(VerticalAlignment.center) { dimensions in
-                        dimensions[VerticalAlignment.bottom]
+            .overlay(alignment: .center) {
+                Image(systemName: "magnifyingglass")
+                    .font(.caption.bold())
+                    .foregroundStyle(.secondary)
+                    .frame(width: 24, height: 24)
+                    .background(.background.opacity(0.9), in: Circle())
+                    .overlay {
+                        Circle()
+                            .strokeBorder(Color.primary.opacity(0.14), lineWidth: 1)
                     }
             }
             .padding(.horizontal, 8)
@@ -945,88 +949,12 @@ private struct TimelineCenterNowLine: View {
             .accessibilityValue(accessibilityValue)
     }
 
-    private var readHead: some View {
-        VStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(date.formatted(date: .numeric, time: .omitted))
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-
-                Text(date.formatted(date: .omitted, time: .shortened))
-                    .font(.title3)
-                    .monospacedDigit()
-                    .bold()
-                    .lineLimit(1)
-
-                if let allDaySummary {
-                    Divider()
-
-                    HStack(spacing: 6) {
-                        Text("All day")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-
-                        Text(allDaySummary)
-                            .font(.caption)
-                            .foregroundStyle(.primary)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.8)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                }
-            }
-            .padding(.horizontal, 14)
-            .padding(.top, 14)
-            .padding(.bottom, allDaySummary == nil ? 12 : 14)
-            .frame(width: TimelineLayoutMetrics.readHeadWidth, alignment: .leading)
-            .background(.background, in: .rect(cornerRadius: 16))
-            .overlay {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .strokeBorder(Color.primary.opacity(0.16), lineWidth: 1)
-            }
-            .overlay(alignment: .top) {
-                RoundedRectangle(cornerRadius: 1.5, style: .continuous)
-                    .fill(Color.primary.opacity(0.08))
-                    .frame(height: 3)
-                    .padding(.horizontal, 14)
-                    .padding(.top, 7)
-            }
-            .shadow(color: .black.opacity(0.04), radius: 3, y: 1)
-
-            RoundedRectangle(cornerRadius: 2, style: .continuous)
-                .fill(pointerColor)
-                .frame(width: 4, height: 13)
-        }
-    }
-
     private var markerLineColor: Color {
         Color.red.opacity(0.24)
     }
 
-    private var pointerColor: Color {
-        Color.red.opacity(0.38)
-    }
-
-    private var allDaySummary: String? {
-        guard let firstTitle = allDayTitles.first else { return nil }
-        let extraCount = allDayTitles.count - 1
-
-        if extraCount > 0 {
-            return "\(firstTitle) +\(extraCount)"
-        }
-
-        return firstTitle
-    }
-
     private var accessibilityValue: String {
-        let formattedDate = date.formatted(date: .numeric, time: .shortened)
-
-        guard allDayTitles.isEmpty == false else {
-            return formattedDate
-        }
-
-        return "\(formattedDate). All day events: \(allDayTitles.joined(separator: ", "))"
+        date.formatted(.dateTime.weekday(.wide).month(.wide).day().hour().minute())
     }
 }
 

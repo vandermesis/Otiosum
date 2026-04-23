@@ -121,6 +121,28 @@ final class PlannerShellViewModel {
         )
     }
 
+    func makeTimelinePlans(
+        items: [Event],
+        calendarLinks: [CalendarLink],
+        template: DayTemplateSnapshot,
+        budget: DailyBudgetSnapshot,
+        sceneIsActive: Bool
+    ) -> [(Date, DayPlan)] {
+        plannerViewModel.makeTimelinePlans(
+            selectedDay: selectedDay,
+            items: items,
+            calendarLinks: calendarLinks,
+            template: template,
+            budget: budget,
+            calendarEventsForDay: { day in
+                self.calendarService.events(for: day)
+            },
+            contextForDay: { _ in
+                self.inferenceContext(sceneIsActive: sceneIsActive)
+            }
+        )
+    }
+
     func promptKey(for plan: DayPlan) -> String {
         plannerViewModel.makePromptKey(for: plan)
     }

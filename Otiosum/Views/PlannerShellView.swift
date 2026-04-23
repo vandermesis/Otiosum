@@ -21,15 +21,37 @@ struct PlannerShellView: View {
     private var templateSnapshot: DayTemplateSnapshot { viewModel.templateSnapshot(from: templates) }
     private var budgetSnapshot: DailyBudgetSnapshot { viewModel.budgetSnapshot(from: budgets) }
     private var eventLookup: [UUID: Event] { viewModel.eventLookup(from: items) }
-
-    private var selectedDayPlan: DayPlan {
-        viewModel.makeSelectedDayPlan(
+    private var timelineDayPlans: [(Date, DayPlan)] {
+        viewModel.makeTimelinePlans(
             items: items,
             calendarLinks: calendarLinks,
             template: templateSnapshot,
             budget: budgetSnapshot,
             sceneIsActive: scenePhase == .active
         )
+    }
+
+    private var selectedDayPlan: DayPlan {
+        timelineDayPlans.first { entry in
+            Calendar.current.isDate(entry.0, inSameDayAs: viewModel.selectedDay)
+        }?.1 ?? viewModel.makeSelectedDayPlan(
+            items: items,
+            calendarLinks: calendarLinks,
+            template: templateSnapshot,
+            budget: budgetSnapshot,
+            sceneIsActive: scenePhase == .active
+        )
+    }
+
+    private var timelineBlocks: [PlannedBlock] {
+        timelineDayPlans
+            .flatMap { $0.1.allBlocks }
+            .sorted { lhs, rhs in
+                if lhs.start == rhs.start {
+                    return lhs.end < rhs.end
+                }
+                return lhs.start < rhs.start
+            }
     }
 
     private var archivedEvents: [Event] {
@@ -56,6 +78,7 @@ struct PlannerShellView: View {
                     TodayScreen(
                         day: selectedDayBinding,
                         plan: selectedDayPlan,
+                        timelineBlocks: timelineBlocks,
                         budget: budgetSnapshot,
                         calendarService: viewModel.calendarService,
                         onOpenArchive: {
@@ -120,7 +143,7 @@ struct PlannerShellView: View {
                     )
                     .toolbar(.hidden, for: .navigationBar)
                 }
-                .safeAreaInset(edge: .bottom, spacing: 0) {
+                .overlay(alignment: .bottom) {
                     QuickCaptureToolbarContent(
                         text: todayQuickCaptureBinding,
                         isTextFieldFocused: $isQuickCaptureFocused,
@@ -137,14 +160,8 @@ struct PlannerShellView: View {
                             addSearchTextToArchiveIfNeeded()
                         }
                     )
-                    .padding(.horizontal, 18)
-                    .padding(.top, 12)
+                    .padding(.horizontal, 12)
                     .padding(.bottom, 10)
-                    .frame(maxWidth: .infinity)
-                    .background(.regularMaterial, ignoresSafeAreaEdges: .bottom)
-                    .overlay(alignment: .top) {
-                        Divider()
-                    }
                 }
             }
         }
@@ -277,31 +294,39 @@ private struct QuickCaptureToolbarContent: View {
     }
 
     var body: some View {
-        VStack(spacing: 10) {
-            HStack(spacing: 10) {
-                QuickCaptureField(
-                    text: $text,
-                    isTextFieldFocused: isTextFieldFocused,
-                    suggestion: suggestion,
-                    onSubmit: onAddToToday
-                )
+        HStack(spacing: 8) {
+            QuickCaptureField(
+                text: $text,
+                isTextFieldFocused: isTextFieldFocused,
+                suggestion: suggestion,
+                onSubmit: onAddToToday
+            )
 
-                Button("Add", systemImage: "plus") {
-                    onAddToToday()
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(hasText == false)
-                .controlSize(.large)
-                .accessibilityIdentifier("quick-add-today")
+            Button("Add", systemImage: "plus") {
+                onAddToToday()
             }
+            .buttonStyle(.borderedProminent)
+            .labelStyle(.iconOnly)
+            .disabled(hasText == false)
+            .frame(width: 44, height: 44)
+            .clipShape(.circle)
+            .accessibilityIdentifier("quick-add-today")
 
             Button("Archive for later", systemImage: "archivebox") {
                 onAddToArchive()
             }
             .buttonStyle(.bordered)
+            .labelStyle(.iconOnly)
             .disabled(hasText == false)
-            .frame(maxWidth: .infinity, alignment: .trailing)
+            .frame(width: 44, height: 44)
+            .clipShape(.circle)
             .accessibilityIdentifier("quick-add-someday")
+        }
+        .padding(8)
+        .background(.regularMaterial, in: .rect(cornerRadius: 24))
+        .overlay {
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .strokeBorder(.white.opacity(0.48), lineWidth: 1)
         }
     }
 }
@@ -330,8 +355,8 @@ private struct QuickCaptureField: View {
             }
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .frame(minHeight: 52)
+        .padding(.vertical, 8)
+        .frame(minHeight: 44)
         .background(.background.opacity(0.78), in: Capsule())
         .overlay {
             Capsule()

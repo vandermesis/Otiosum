@@ -21,6 +21,18 @@ struct PlannerStoreTests {
         #expect(store.didSeedDefaults)
     }
 
+    @Test("Calendar refresh interval covers the visible timeline range")
+    func calendarRefreshIntervalCoversVisibleTimelineRange() throws {
+        let store = PlannerStore()
+        let calendar = Calendar.current
+        let selectedDay = try #require(calendar.date(from: DateComponents(year: 2026, month: 4, day: 22)))
+
+        let interval = store.calendarRefreshInterval(around: selectedDay)
+
+        #expect(interval.start == calendar.date(byAdding: .day, value: -3, to: selectedDay))
+        #expect(interval.end == calendar.date(byAdding: .day, value: 4, to: selectedDay))
+    }
+
     @Test("Archiving quick capture creates an unscheduled archived event and clears input")
     func archiveQuickEvent() throws {
         let modelContext = try makeModelContext()

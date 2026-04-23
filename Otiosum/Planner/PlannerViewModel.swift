@@ -76,6 +76,44 @@ struct PlannerViewModel {
         }
     }
 
+    func makeTimelinePlans(
+        selectedDay: Date,
+        items: [Event],
+        calendarLinks: [CalendarLink],
+        template: DayTemplateSnapshot,
+        budget: DailyBudgetSnapshot,
+        calendarEventsForDay: (Date) -> [CalendarEventSnapshot],
+        contextForDay: (Date) -> InferenceContext,
+        dayOffsets: ClosedRange<Int> = -3...3
+    ) -> [(Date, DayPlan)] {
+        let calendar = Calendar.current
+        let selectedStart = calendar.startOfDay(for: selectedDay)
+
+        return dayOffsets.compactMap { offset in
+            guard
+                let day = calendar.date(
+                    byAdding: .day,
+                    value: offset,
+                    to: selectedStart
+                )
+            else {
+                return nil
+            }
+
+            let plan = makeDayPlan(
+                day: day,
+                items: items,
+                calendarEvents: calendarEventsForDay(day),
+                calendarLinks: calendarLinks,
+                template: template,
+                budget: budget,
+                context: contextForDay(day)
+            )
+
+            return (day, plan)
+        }
+    }
+
     func makePromptKey(for plan: DayPlan) -> String {
         let overflow = plan.overflowIssues.map(\.itemID.uuidString).joined(separator: ",")
         let shifts = plan.shiftProposals.map(\.calendarEventID).joined(separator: ",")

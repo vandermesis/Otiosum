@@ -315,8 +315,9 @@ final class PlannerStore {
 
     func calendarRefreshInterval(around day: Date) -> DateInterval {
         let calendar = Calendar.current
-        let start = calendar.startOfDay(for: day)
-        let end = calendar.date(byAdding: .day, value: 7, to: start) ?? start.adding(minutes: 7 * 24 * 60)
+        let selectedStart = calendar.startOfDay(for: day)
+        let start = calendar.date(byAdding: .day, value: -3, to: selectedStart) ?? selectedStart
+        let end = calendar.date(byAdding: .day, value: 4, to: selectedStart) ?? selectedStart.adding(minutes: 4 * 24 * 60)
         return DateInterval(start: start, end: end)
     }
 
