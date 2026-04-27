@@ -124,6 +124,8 @@ xcuserdata
 .codex/
 AGENTS.md
 
+#Prototypes and previews
 Artifacts/
+prototype-assets/
 
 # End of https://www.toptal.com/developers/gitignore/api/swiftpackagemanager,swiftpm,swift,macos

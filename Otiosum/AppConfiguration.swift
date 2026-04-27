@@ -104,7 +104,7 @@ enum AppConfiguration {
         )
         return directory.appending(path: "Otiosum.store")
     }
-
+    
     private static func resetPersistentStore(at storeURL: URL) throws {
         let fileManager = FileManager.default
         let companionURLs = [
