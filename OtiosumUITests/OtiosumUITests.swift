@@ -30,6 +30,12 @@ final class OtiosumUITests: XCTestCase {
         quickField.typeText("focus sprint\n")
 
         let value = quickField.value as? String
+        app.activate()
+        let element = app.scrollViews/*@START_MENU_TOKEN@*/.firstMatch/*[[".containing(.staticText, identifier: \"Quiet time is below the rest target.\").firstMatch",".containing(.other, identifier: \"timeline-task-breakfast\").firstMatch",".containing(.other, identifier: nil).firstMatch",".firstMatch"],[[[-1,3],[-1,2],[-1,1],[-1,0]]],[0]]@END_MENU_TOKEN@*/
+        element.swipeDown()
+        element.tap()
+        app/*@START_MENU_TOKEN@*/.textFields["quick-add-field"]/*[[".otherElements",".textFields[\"One short phrase\"]",".textFields[\"quick-add-field\"]",".textFields"],[[[-1,2],[-1,1],[-1,3],[-1,0,1]],[[-1,2],[-1,1]]],[0]]@END_MENU_TOKEN@*/.firstMatch.tap()
+        app/*@START_MENU_TOKEN@*/.buttons["Done"]/*[[".otherElements",".buttons[\"done\"]",".buttons[\"Done\"]"],[[[-1,2],[-1,1],[-1,0,1]],[[-1,2],[-1,1]]],[0]]@END_MENU_TOKEN@*/.firstMatch.tap()
         XCTAssertTrue(value == nil || value == "" || value == "One short phrase")
     }
 
