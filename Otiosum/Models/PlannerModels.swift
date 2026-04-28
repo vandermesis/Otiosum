@@ -20,7 +20,7 @@ final class Event {
     var isCompleted: Bool
     var createdAt: Date
     var orderHint: Double
-    var isArchived: Bool
+    @Attribute(originalName: "isArchived") var isSavedForLater: Bool
     var forceAfterBedtime: Bool
 
     init(
@@ -41,7 +41,7 @@ final class Event {
         isCompleted: Bool = false,
         createdAt: Date = .now,
         orderHint: Double = .random(in: 0..<1_000_000),
-        isArchived: Bool = false,
+        isSavedForLater: Bool = false,
         forceAfterBedtime: Bool = false
     ) {
         self.id = id
@@ -61,7 +61,7 @@ final class Event {
         self.isCompleted = isCompleted
         self.createdAt = createdAt
         self.orderHint = orderHint
-        self.isArchived = isArchived
+        self.isSavedForLater = isSavedForLater
         self.forceAfterBedtime = forceAfterBedtime
     }
 
@@ -106,7 +106,7 @@ final class Event {
             notes: notes,
             isCompleted: isCompleted,
             orderHint: orderHint,
-            isArchived: isArchived,
+            isSavedForLater: isSavedForLater,
             forceAfterBedtime: forceAfterBedtime
         )
     }

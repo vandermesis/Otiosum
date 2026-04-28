@@ -27,9 +27,9 @@ final class PlannerShellViewModel {
         return IconSuggester.suggestions(for: title)
     }
 
-    var pendingOverflow: PendingOverflowState? {
-        get { store.pendingOverflow }
-        set { store.pendingOverflow = newValue }
+    var pendingTooMuchToday: PendingTooMuchTodayState? {
+        get { store.pendingTooMuchToday }
+        set { store.pendingTooMuchToday = newValue }
     }
 
     var pendingCalendarShift: PendingCalendarShiftState? {
@@ -162,21 +162,21 @@ final class PlannerShellViewModel {
         )
     }
 
-    func archiveQuickEvent(modelContext: ModelContext) {
+    func saveQuickEventForLater(modelContext: ModelContext) {
         registerInteraction()
-        store.archiveQuickEvent(modelContext: modelContext)
+        store.saveQuickEventForLater(modelContext: modelContext)
     }
 
-    func restoreArchivedEvent(
+    func restoreLaterEvent(
         _ event: Event,
         lane: DropLane,
         modelContext: ModelContext
     ) {
         registerInteraction()
-        store.restoreArchivedEvent(event, lane: lane, on: selectedDay, modelContext: modelContext)
+        store.restoreLaterEvent(event, lane: lane, on: selectedDay, modelContext: modelContext)
     }
 
-    func scheduleArchivedEvent(
+    func scheduleLaterEvent(
         _ event: Event,
         at date: Date,
         modelContext: ModelContext
@@ -205,14 +205,14 @@ final class PlannerShellViewModel {
         store.moveEventLater(event, on: selectedDay, modelContext: modelContext)
     }
 
-    func archiveEvent(
+    func saveEventForLater(
         for block: PlannedBlock,
         itemLookup: [UUID: Event],
         modelContext: ModelContext
     ) {
         registerInteraction()
         guard let event = itemLookup[block.itemID] else { return }
-        store.archiveEvent(event, modelContext: modelContext)
+        store.saveEventForLater(event, modelContext: modelContext)
     }
 
     func rescheduleBlock(
@@ -285,11 +285,11 @@ final class PlannerShellViewModel {
         store.refreshPrompts(for: plan, modelContext: modelContext)
     }
 
-    func applyOverflowChoice(
-        _ choice: OverflowChoice,
+    func applyTooMuchTodayChoice(
+        _ choice: TooMuchTodayChoice,
         modelContext: ModelContext
     ) {
-        store.applyOverflowChoice(choice, modelContext: modelContext)
+        store.applyTooMuchTodayChoice(choice, modelContext: modelContext)
     }
 
     func applyCalendarDecision(

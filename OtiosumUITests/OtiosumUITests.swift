@@ -30,21 +30,21 @@ final class OtiosumUITests: XCTestCase {
         quickField.typeText("focus sprint\n")
 
         let value = quickField.value as? String
-        XCTAssertTrue(value == nil || value == "" || value == "Add")
+        XCTAssertTrue(value == nil || value == "" || value == "One short phrase")
     }
 
     @MainActor
-    func testQuickAddToSomedayClearsInput() throws {
+    func testQuickAddToLaterClearsInput() throws {
         let app = launchApp()
 
         let quickField = app.textFields["quick-add-field"]
         XCTAssertTrue(quickField.waitForExistence(timeout: 2))
         quickField.tap()
-        quickField.typeText("someday writing")
-        app.buttons["quick-add-someday"].tap()
+        quickField.typeText("later writing")
+        app.buttons["quick-add-later"].tap()
         let clearedPredicate = NSPredicate { _, _ in
             let value = quickField.value as? String
-            return value == nil || value == "" || value == "Add"
+            return value == nil || value == "" || value == "One short phrase"
         }
         let expectation = expectation(for: clearedPredicate, evaluatedWith: quickField)
         wait(for: [expectation], timeout: 2)
@@ -54,7 +54,7 @@ final class OtiosumUITests: XCTestCase {
     func testSettingsAccessFromToolbar() throws {
         let app = launchApp()
 
-        let settingsButton = app.buttons["now-open-settings"]
+        let settingsButton = app.buttons["today-open-settings"]
         XCTAssertTrue(settingsButton.waitForExistence(timeout: 2))
         settingsButton.tap()
 

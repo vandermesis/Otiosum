@@ -162,7 +162,7 @@ enum AppConfiguration {
                 preferredStartMinutes: max(template.wakeUpMinutes + 30, 9 * 60),
                 preferredTimeWindow: .morning,
                 flexibility: .flexible,
-                isArchived: false
+                isSavedForLater: false
             )
         )
 
@@ -178,7 +178,7 @@ enum AppConfiguration {
                 preferredStartMinutes: 15 * 60,
                 preferredTimeWindow: .afternoon,
                 flexibility: .askBeforeMove,
-                isArchived: false
+                isSavedForLater: false
             )
         )
 
@@ -194,7 +194,7 @@ enum AppConfiguration {
                 preferredStartMinutes: 18 * 60,
                 preferredTimeWindow: .evening,
                 flexibility: .flexible,
-                isArchived: false
+                isSavedForLater: false
             )
         )
 
@@ -210,7 +210,7 @@ enum AppConfiguration {
                 preferredStartMinutes: nil,
                 preferredTimeWindow: .anytime,
                 flexibility: .flexible,
-                isArchived: true
+                isSavedForLater: true
             )
         )
 
@@ -232,7 +232,7 @@ enum AppConfiguration {
                     preferredStartMinutes: roundedMinutes,
                     preferredTimeWindow: .anytime,
                     flexibility: .flexible,
-                    isArchived: false
+                    isSavedForLater: false
                 )
             )
         }

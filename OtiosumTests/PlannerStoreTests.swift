@@ -33,28 +33,28 @@ struct PlannerStoreTests {
         #expect(interval.end == calendar.date(byAdding: .day, value: 4, to: selectedDay))
     }
 
-    @Test("Archiving quick capture creates an unscheduled archived event and clears input")
-    func archiveQuickEvent() throws {
+    @Test("Saving quick capture for Later creates an unscheduled Later event and clears input")
+    func saveQuickEventForLater() throws {
         let modelContext = try makeModelContext()
         let store = PlannerStore()
         try store.ensureSeedData(in: modelContext)
 
         store.todayQuickCapture = "read chapter"
-        store.archiveQuickEvent(modelContext: modelContext)
+        store.saveQuickEventForLater(modelContext: modelContext)
 
         let items = try modelContext.fetch(FetchDescriptor<Event>())
         let item = try #require(items.first)
 
         #expect(item.title == "Read chapter")
-        #expect(item.isArchived)
+        #expect(item.isSavedForLater)
         #expect(item.scheduledDay == nil)
         #expect(item.preferredStartMinutes == nil)
         #expect(item.preferredTimeWindow == .anytime)
         #expect(store.todayQuickCapture.isEmpty)
     }
 
-    @Test("Applying archive overflow choice updates event and clears pending state")
-    func applyOverflowChoiceArchive() throws {
+    @Test("Applying save-for-Later Too Much Today choice updates event and clears pending state")
+    func applyTooMuchTodayChoiceSaveForLater() throws {
         let modelContext = try makeModelContext()
         let store = PlannerStore()
         let item = Event(
@@ -62,13 +62,13 @@ struct PlannerStoreTests {
             suggestedIcon: "moon.stars",
             tintToken: "indigo",
             scheduledDay: Date(timeIntervalSinceReferenceDate: 60_000),
-            isArchived: false,
+            isSavedForLater: false,
             forceAfterBedtime: true
         )
         modelContext.insert(item)
         try modelContext.save()
 
-        store.pendingOverflow = PendingOverflowState(
+        store.pendingTooMuchToday = PendingTooMuchTodayState(
             itemID: item.id,
             title: item.title,
             message: "Not enough room",
@@ -77,16 +77,16 @@ struct PlannerStoreTests {
             defaultChoice: .nextSuitableDay
         )
 
-        store.applyOverflowChoice(.returnToJar, modelContext: modelContext)
+        store.applyTooMuchTodayChoice(.saveForLater, modelContext: modelContext)
 
-        #expect(item.isArchived)
+        #expect(item.isSavedForLater)
         #expect(item.scheduledDay == nil)
         #expect(item.forceAfterBedtime == false)
-        #expect(store.pendingOverflow == nil)
+        #expect(store.pendingTooMuchToday == nil)
     }
 
     @Test("Applying keep-anyway overflow choice keeps item scheduled on selected day")
-    func applyOverflowChoiceKeepAnyway() throws {
+    func applyTooMuchTodayChoiceKeepAnyway() throws {
         let modelContext = try makeModelContext()
         let store = PlannerStore()
         let selectedDay = Date(timeIntervalSinceReferenceDate: 80_000)
@@ -97,13 +97,13 @@ struct PlannerStoreTests {
             suggestedIcon: "calendar",
             tintToken: "sky",
             scheduledDay: nil,
-            isArchived: true,
+            isSavedForLater: true,
             forceAfterBedtime: false
         )
         modelContext.insert(item)
         try modelContext.save()
 
-        store.pendingOverflow = PendingOverflowState(
+        store.pendingTooMuchToday = PendingTooMuchTodayState(
             itemID: item.id,
             title: item.title,
             message: "Not enough room",
@@ -112,12 +112,47 @@ struct PlannerStoreTests {
             defaultChoice: .nextSuitableDay
         )
 
-        store.applyOverflowChoice(.keepAnyway, modelContext: modelContext)
+        store.applyTooMuchTodayChoice(.keepAnyway, modelContext: modelContext)
 
         #expect(item.scheduledDay == selectedDay)
         #expect(item.forceAfterBedtime)
-        #expect(item.isArchived == false)
-        #expect(store.pendingOverflow == nil)
+        #expect(item.isSavedForLater == false)
+        #expect(store.pendingTooMuchToday == nil)
+    }
+
+    @Test("Applying move-another-day overflow choice reschedules item and clears archive state")
+    func applyTooMuchTodayChoiceMoveAnotherDay() throws {
+        let modelContext = try makeModelContext()
+        let store = PlannerStore()
+        let suggestedDate = Date(timeIntervalSinceReferenceDate: 82_000)
+        let item = Event(
+            title: "Move me tomorrow",
+            suggestedIcon: "calendar",
+            tintToken: "sky",
+            scheduledDay: nil,
+            preferredStartMinutes: 21 * 60,
+            isSavedForLater: true,
+            forceAfterBedtime: true
+        )
+        modelContext.insert(item)
+        try modelContext.save()
+
+        store.pendingTooMuchToday = PendingTooMuchTodayState(
+            itemID: item.id,
+            title: item.title,
+            message: "Not enough room",
+            suggestedDate: suggestedDate,
+            displacedCategory: .rest,
+            defaultChoice: .nextSuitableDay
+        )
+
+        store.applyTooMuchTodayChoice(.nextSuitableDay, modelContext: modelContext)
+
+        #expect(item.scheduledDay == suggestedDate)
+        #expect(item.preferredStartMinutes == nil)
+        #expect(item.isSavedForLater == false)
+        #expect(item.forceAfterBedtime == false)
+        #expect(store.pendingTooMuchToday == nil)
     }
 
     @Test("Rescheduling event updates day, start, and clears archive state")
@@ -132,7 +167,7 @@ struct PlannerStoreTests {
             tintToken: "sky",
             scheduledDay: nil,
             preferredStartMinutes: nil,
-            isArchived: true,
+            isSavedForLater: true,
             forceAfterBedtime: true
         )
 
@@ -144,7 +179,7 @@ struct PlannerStoreTests {
         let calendar = Calendar.current
         #expect(item.scheduledDay == calendar.startOfDay(for: start))
         #expect(item.preferredStartMinutes == start.minutesSinceStartOfDay(using: calendar))
-        #expect(item.isArchived == false)
+        #expect(item.isSavedForLater == false)
         #expect(item.forceAfterBedtime == false)
     }
 
@@ -209,7 +244,7 @@ struct PlannerStoreTests {
             scheduledDay: originalDate,
             preferredStartMinutes: 8 * 60,
             isCompleted: true,
-            isArchived: true
+            isSavedForLater: true
         )
         modelContext.insert(item)
         try modelContext.save()
@@ -221,7 +256,7 @@ struct PlannerStoreTests {
         #expect(item.scheduledDay == calendar.startOfDay(for: start))
         #expect(item.preferredStartMinutes == start.minutesSinceStartOfDay(using: calendar))
         #expect(item.isCompleted == false)
-        #expect(item.isArchived == false)
+        #expect(item.isSavedForLater == false)
     }
 
     @Test("Quick add from Today uses provided timeline anchor and configured default duration")
@@ -250,38 +285,63 @@ struct PlannerStoreTests {
         #expect(store.todayQuickCapture.isEmpty)
     }
 
-    @Test("Archiving quick event creates archived event from today input")
-    func archiveQuickEventFromTodayInput() throws {
+    @Test("Saving quick event for Later creates Later event from today input")
+    func saveQuickEventForLaterFromTodayInput() throws {
         let modelContext = try makeModelContext()
         let store = PlannerStore()
         try store.ensureSeedData(in: modelContext)
 
-        store.todayQuickCapture = "someday maybe"
-        store.archiveQuickEvent(modelContext: modelContext)
+        store.todayQuickCapture = "later maybe"
+        store.saveQuickEventForLater(modelContext: modelContext)
 
         let items = try modelContext.fetch(FetchDescriptor<Event>())
         let item = try #require(items.first)
-        #expect(item.title == "Someday maybe")
-        #expect(item.isArchived)
+        #expect(item.title == "Later maybe")
+        #expect(item.isSavedForLater)
         #expect(item.scheduledDay == nil)
         #expect(store.todayQuickCapture.isEmpty)
     }
 
-    @Test("Refresh prompts picks the first overflow and first shift proposal")
+    @Test("Restoring a Later item assigns it to Today and the chosen lane")
+    func restoreLaterEventUsesChosenLane() throws {
+        let modelContext = try makeModelContext()
+        let store = PlannerStore()
+        let day = Calendar.current.startOfDay(for: Date(timeIntervalSinceReferenceDate: 170_000))
+        let item = Event(
+            title: "Read later",
+            suggestedIcon: "book",
+            tintToken: "sky",
+            scheduledDay: nil,
+            preferredStartMinutes: nil,
+            isSavedForLater: true
+        )
+        modelContext.insert(item)
+        try modelContext.save()
+
+        store.restoreLaterEvent(item, lane: .evening, on: day, modelContext: modelContext)
+
+        #expect(item.isSavedForLater == false)
+        #expect(item.scheduledDay == day)
+        #expect(item.preferredTimeWindow == .evening)
+        #expect(item.preferredStartMinutes == PreferredTimeWindow.evening.startMinutes)
+        #expect(item.forceAfterBedtime == false)
+    }
+
+    @Test("Refresh prompts picks the first Too Much Today issue and first shift proposal")
     func refreshPromptsSelectsFirstEntries() throws {
         let store = PlannerStore()
         let now = Date(timeIntervalSinceReferenceDate: 90_000)
 
-        let overflow1 = OverflowIssue(
+        let tooMuchTodayIssue1 = TooMuchTodayIssue(
             itemID: UUID(),
-            title: "Overflow one",
+            title: "Too much today one",
             message: "First",
             displacedCategory: .sleep,
             suggestedDate: now
         )
-        let overflow2 = OverflowIssue(
+        let tooMuchTodayIssue2 = TooMuchTodayIssue(
             itemID: UUID(),
-            title: "Overflow two",
+            title: "Too much today two",
             message: "Second",
             displacedCategory: .rest,
             suggestedDate: now.adding(minutes: 60)
@@ -312,7 +372,7 @@ struct PlannerStoreTests {
             laterBlocks: [],
             protectedBlocks: [],
             warnings: [],
-            overflowIssues: [overflow1, overflow2],
+            tooMuchTodayIssues: [tooMuchTodayIssue1, tooMuchTodayIssue2],
             shiftProposals: [shift1, shift2],
             budgetSummary: BudgetUsageSummary(workMinutes: 0, restMinutes: 0, sleepMinutesProtected: 0, scheduledCount: 0)
         )
@@ -320,7 +380,7 @@ struct PlannerStoreTests {
         let modelContext = try makeModelContext()
         store.refreshPrompts(for: plan, modelContext: modelContext)
 
-        #expect(store.pendingOverflow?.itemID == overflow1.itemID)
+        #expect(store.pendingTooMuchToday?.itemID == tooMuchTodayIssue1.itemID)
         #expect(store.pendingCalendarShift?.proposal.calendarEventID == "A")
     }
 

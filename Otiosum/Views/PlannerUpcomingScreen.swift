@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct FutureScreen: View {
+struct NextDaysScreen: View {
     let plans: [(Date, DayPlan)]
     let budget: DailyBudgetSnapshot
     let calendarService: SystemCalendarService
@@ -9,9 +9,9 @@ struct FutureScreen: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    Text("Future")
+                    Text("Next Days")
                         .font(.system(.largeTitle, design: .rounded, weight: .bold))
-                    Text("A readable forecast with focus blocks, guardrails, and protected energy.")
+                    Text("Next Days keeps a light forecast of focus blocks, guardrails, and protected energy.")
                         .foregroundStyle(.secondary)
 
                     if calendarService.isLoading {
@@ -19,7 +19,7 @@ struct FutureScreen: View {
                     }
 
                     ForEach(plans, id: \.0) { day, plan in
-                        FutureDayCard(day: day, plan: plan, budget: budget)
+                        NextDaysDayCard(day: day, plan: plan, budget: budget)
                     }
                 }
                 .padding(.horizontal, 18)
@@ -30,7 +30,7 @@ struct FutureScreen: View {
     }
 }
 
-private struct FutureDayCard: View {
+private struct NextDaysDayCard: View {
     let day: Date
     let plan: DayPlan
     let budget: DailyBudgetSnapshot

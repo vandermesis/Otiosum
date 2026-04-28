@@ -18,7 +18,7 @@ struct TimeWheelView: View {
     let currentBlockID: UUID?
     let nextBlockID: UUID?
     let showsHeader: Bool
-    let onDropSomedayItem: ((UUID, Date) -> Bool)?
+    let onDropLaterItem: ((UUID, Date) -> Bool)?
     let onRescheduleBlock: ((PlannedBlock, Date) -> Void)?
     let onAdjustBlockDuration: ((PlannedBlock, Int) -> Void)?
     let onQuickAction: ((PlannedBlock, TimelineQuickAction) -> Void)?
@@ -43,7 +43,7 @@ struct TimeWheelView: View {
         currentBlockID: UUID? = nil,
         nextBlockID: UUID? = nil,
         showsHeader: Bool = true,
-        onDropSomedayItem: ((UUID, Date) -> Bool)? = nil,
+        onDropLaterItem: ((UUID, Date) -> Bool)? = nil,
         onRescheduleBlock: ((PlannedBlock, Date) -> Void)? = nil,
         onAdjustBlockDuration: ((PlannedBlock, Int) -> Void)? = nil,
         onQuickAction: ((PlannedBlock, TimelineQuickAction) -> Void)? = nil,
@@ -55,7 +55,7 @@ struct TimeWheelView: View {
         self.currentBlockID = currentBlockID
         self.nextBlockID = nextBlockID
         self.showsHeader = showsHeader
-        self.onDropSomedayItem = onDropSomedayItem
+        self.onDropLaterItem = onDropLaterItem
         self.onRescheduleBlock = onRescheduleBlock
         self.onAdjustBlockDuration = onAdjustBlockDuration
         self.onQuickAction = onQuickAction
@@ -88,10 +88,10 @@ struct TimeWheelView: View {
                             showsHeader: showsHeader,
                             calendar: calendar,
                             dragState: dragState,
-                            onDropSomedayItem: { itemID, date in
-                                let didHandle = onDropSomedayItem?(itemID, roundedDate(date, stepMinutes: slotMinutes)) ?? false
+                            onDropLaterItem: { itemID, date in
+                                let didHandle = onDropLaterItem?(itemID, roundedDate(date, stepMinutes: slotMinutes)) ?? false
                                 if didHandle == false {
-                                    showInvalidDropMessage("Couldn’t place this Someday item.")
+                                    showInvalidDropMessage("Couldn’t place this Later item.")
                                 }
                                 return didHandle
                             },
@@ -130,13 +130,11 @@ struct TimeWheelView: View {
                 }
                 .overlay(alignment: .center) {
                     if shouldShowBackToNow(for: now) {
-                        Button("Back to Now", systemImage: "magnifyingglass") {
+                        Button("Back to Now", systemImage: "arrow.clockwise") {
                             jumpToNow(using: now)
                         }
                         .buttonStyle(.borderedProminent)
-                        .labelStyle(.iconOnly)
                         .controlSize(.small)
-                        .frame(width: 36, height: 36)
                         .accessibilityHint("Centers the timeline around the current time")
                     }
                 }
@@ -335,7 +333,7 @@ private struct TimelineCanvasView: View {
     let showsHeader: Bool
     let calendar: Calendar
     let dragState: TimelineDragState?
-    let onDropSomedayItem: (UUID, Date) -> Bool
+    let onDropLaterItem: (UUID, Date) -> Bool
     let onDragChanged: (PlannedBlock, Date) -> Void
     let onDragEnded: (PlannedBlock) -> Void
     let onAdjustDuration: (PlannedBlock, Int) -> Void
@@ -474,7 +472,7 @@ private struct TimelineCanvasView: View {
                 return false
             }
 
-            return onDropSomedayItem(itemID, date(at: location))
+            return onDropLaterItem(itemID, date(at: location))
         }
     }
 
@@ -705,49 +703,13 @@ private struct TimelineTaskCapsule: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
 
                 if isCurrent {
-                    TimelineTag(text: "Now", tint: .red)
+                    TimelineTag(text: "Now", tint: tintColor(token: block.tintToken))
                 } else if isNext {
-                    TimelineTag(text: "Next", tint: .blue)
+                    TimelineTag(text: "Next", tint: .secondary)
                 }
 
                 if block.source == .local {
-                    HStack(spacing: 4) {
-                        if block.isCompleted {
-                            Button {
-                                onQuickAction(.markUndone)
-                            } label: {
-                                Image(systemName: "arrow.uturn.backward.circle.fill")
-                                    .font(.caption)
-                                    .frame(width: 28, height: 28)
-                            }
-                            .buttonStyle(.plain)
-                            .contentShape(.rect)
-                            .accessibilityIdentifier("timeline-task-undo-\(block.title.testingIdentifier)")
-                        } else {
-                            Button {
-                                onQuickAction(.startNow)
-                            } label: {
-                                Image(systemName: "play.circle.fill")
-                                    .font(.caption)
-                                    .frame(width: 28, height: 28)
-                            }
-                            .buttonStyle(.plain)
-                            .contentShape(.rect)
-                            .accessibilityIdentifier("timeline-task-start-\(block.title.testingIdentifier)")
-
-                            Button {
-                                onQuickAction(.markDone)
-                            } label: {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .font(.caption)
-                                    .frame(width: 28, height: 28)
-                            }
-                            .buttonStyle(.plain)
-                            .contentShape(.rect)
-                            .accessibilityIdentifier("timeline-task-done-\(block.title.testingIdentifier)")
-                        }
-                    }
-                    .foregroundStyle(.secondary)
+                    timelineActionButton
                 } else {
                     Image(systemName: statusSymbol)
                         .font(.caption)
@@ -777,7 +739,7 @@ private struct TimelineTaskCapsule: View {
         .frame(width: width, height: max(effectiveHeight, 44), alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.white.opacity(0.88))
+                .fill(backgroundColor)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
@@ -849,11 +811,11 @@ private struct TimelineTaskCapsule: View {
 
     private var borderColor: Color {
         if isCurrent {
-            return .red.opacity(0.85)
+            return tintColor(token: block.tintToken).opacity(0.85)
         }
 
         if isNext {
-            return .blue.opacity(0.65)
+            return Color.primary.opacity(0.3)
         }
 
         if block.isCompleted {
@@ -869,6 +831,45 @@ private struct TimelineTaskCapsule: View {
         }
 
         return .black.opacity(0.12)
+    }
+
+    @ViewBuilder
+    private var timelineActionButton: some View {
+        if block.isCompleted {
+            Button("Undo", systemImage: "arrow.uturn.backward") {
+                onQuickAction(.markUndone)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .accessibilityIdentifier("timeline-task-undo-\(block.title.testingIdentifier)")
+        } else if isCurrent || now >= block.start {
+            Button("Done", systemImage: "checkmark") {
+                onQuickAction(.markDone)
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+            .tint(tintColor(token: block.tintToken))
+            .accessibilityIdentifier("timeline-task-done-\(block.title.testingIdentifier)")
+        } else {
+            Button("Start", systemImage: "play.fill") {
+                onQuickAction(.startNow)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .accessibilityIdentifier("timeline-task-start-\(block.title.testingIdentifier)")
+        }
+    }
+
+    private var backgroundColor: Color {
+        if block.isProtected {
+            return tintColor(token: block.tintToken).opacity(0.14)
+        }
+
+        if isCurrent {
+            return tintColor(token: block.tintToken).opacity(0.12)
+        }
+
+        return Color.white.opacity(0.9)
     }
 
 }
@@ -933,15 +934,16 @@ private struct TimelineCenterNowLine: View {
                     .frame(height: 1.5)
             }
             .overlay(alignment: .center) {
-                Image(systemName: "magnifyingglass")
-                    .font(.caption.bold())
-                    .foregroundStyle(.secondary)
-                    .frame(width: 24, height: 24)
-                    .background(.background.opacity(0.9), in: Circle())
-                    .overlay {
-                        Circle()
-                            .strokeBorder(Color.primary.opacity(0.14), lineWidth: 1)
-                    }
+                Text(title)
+                    .font(.subheadline.bold())
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(
+                        Capsule()
+                            .fill(Color(red: 0.36, green: 0.56, blue: 0.40).opacity(0.94))
+                    )
+                    .shadow(color: Color(red: 0.36, green: 0.56, blue: 0.40).opacity(0.24), radius: 12, y: 4)
             }
             .padding(.horizontal, 8)
             .allowsHitTesting(false)
@@ -950,7 +952,16 @@ private struct TimelineCenterNowLine: View {
     }
 
     private var markerLineColor: Color {
-        Color.red.opacity(0.24)
+        Color(red: 0.36, green: 0.56, blue: 0.40).opacity(0.45)
+    }
+
+    private var title: String {
+        let roundedNow = Calendar.current.date(bySetting: .second, value: 0, of: .now) ?? .now
+        if abs(date.timeIntervalSince(roundedNow)) < 300 {
+            return "Now \(date.formatted(.dateTime.hour().minute()))"
+        }
+
+        return date.formatted(.dateTime.hour().minute())
     }
 
     private var accessibilityValue: String {

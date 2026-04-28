@@ -6,14 +6,14 @@ struct PlannerBackground: View {
     var body: some View {
         Group {
             if simple {
-                Color(red: 0.96, green: 0.95, blue: 0.92)
+                Color(red: 0.97, green: 0.96, blue: 0.94)
                     .ignoresSafeArea()
             } else {
                 LinearGradient(
                     colors: [
-                        Color(red: 0.98, green: 0.94, blue: 0.85),
-                        Color(red: 0.88, green: 0.95, blue: 0.92),
-                        Color(red: 0.84, green: 0.90, blue: 0.97)
+                        Color(red: 0.98, green: 0.97, blue: 0.95),
+                        Color(red: 0.94, green: 0.96, blue: 0.93),
+                        Color(red: 0.93, green: 0.95, blue: 0.98)
                     ],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing

@@ -115,8 +115,8 @@ struct PlannerViewModel {
     }
 
     func makePromptKey(for plan: DayPlan) -> String {
-        let overflow = plan.overflowIssues.map(\.itemID.uuidString).joined(separator: ",")
+        let tooMuchToday = plan.tooMuchTodayIssues.map(\.itemID.uuidString).joined(separator: ",")
         let shifts = plan.shiftProposals.map(\.calendarEventID).joined(separator: ",")
-        return "\(overflow)|\(shifts)|\(plan.warnings.count)"
+        return "\(tooMuchToday)|\(shifts)|\(plan.warnings.count)"
     }
 }

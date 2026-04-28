@@ -33,7 +33,7 @@ struct PlannerEngineTests {
                 notes: "",
                 isCompleted: false,
                 orderHint: 1,
-                isArchived: false,
+                isSavedForLater: false,
                 forceAfterBedtime: false
             ),
             EventSnapshot(
@@ -53,7 +53,7 @@ struct PlannerEngineTests {
                 notes: "",
                 isCompleted: false,
                 orderHint: 2,
-                isArchived: false,
+                isSavedForLater: false,
                 forceAfterBedtime: false
             )
         ]
@@ -98,7 +98,7 @@ struct PlannerEngineTests {
                 notes: "",
                 isCompleted: false,
                 orderHint: 1,
-                isArchived: false,
+                isSavedForLater: false,
                 forceAfterBedtime: false
             ),
             EventSnapshot(
@@ -118,7 +118,7 @@ struct PlannerEngineTests {
                 notes: "",
                 isCompleted: false,
                 orderHint: 2,
-                isArchived: false,
+                isSavedForLater: false,
                 forceAfterBedtime: false
             )
         ]
@@ -183,7 +183,7 @@ struct PlannerEngineTests {
             notes: "",
             isCompleted: false,
             orderHint: 1,
-            isArchived: false,
+            isSavedForLater: false,
             forceAfterBedtime: false
         )
 
@@ -197,8 +197,49 @@ struct PlannerEngineTests {
             context: InferenceContext(now: day.adding(minutes: 20 * 60), isSceneActive: true, lastUserInteraction: day.adding(minutes: 20 * 60))
         )
 
-        #expect(plan.overflowIssues.contains(where: { $0.itemID == lateItem.id }))
+        #expect(plan.tooMuchTodayIssues.contains(where: { $0.itemID == lateItem.id }))
         #expect(plan.warnings.contains(where: { $0.message == "Not enough room today." }))
+    }
+
+    @Test("Protected meal blocks stay in place when flexible work overlaps them")
+    func protectedMealBlocksStayProtected() throws {
+        let day = try makeDate(year: 2026, month: 4, day: 21, hour: 0, minute: 0)
+        let overlappingItem = EventSnapshot(
+            id: UUID(),
+            title: "Write proposal",
+            source: .local,
+            suggestedIcon: "doc.text",
+            tintToken: "mint",
+            targetDurationMinutes: 45,
+            minimumDurationMinutes: 30,
+            scheduledDay: day,
+            preferredStartMinutes: 13 * 60,
+            preferredTimeWindow: .afternoon,
+            flexibility: .flexible,
+            calendarEventID: nil,
+            protectedCategory: nil,
+            notes: "",
+            isCompleted: false,
+            orderHint: 1,
+            isSavedForLater: false,
+            forceAfterBedtime: false
+        )
+
+        let plan = engine.plan(
+            for: day,
+            localItems: [overlappingItem],
+            calendarEvents: [],
+            calendarLinks: [],
+            template: .default,
+            budget: .default,
+            context: InferenceContext(now: day.adding(minutes: 12 * 60), isSceneActive: true, lastUserInteraction: day.adding(minutes: 12 * 60))
+        )
+
+        let lunchBlock = try #require(plan.protectedBlocks.first(where: { $0.title == "Lunch" }))
+        let localBlock = try #require(plan.allBlocks.first(where: { $0.itemID == overlappingItem.id }))
+
+        #expect(lunchBlock.isProtected)
+        #expect(localBlock.start >= lunchBlock.end)
     }
 
     @MainActor
@@ -229,7 +270,7 @@ struct PlannerEngineTests {
 
         #expect(captured.title == "Walk")
         #expect(captured.targetDurationMinutes == 30)
-        #expect(captured.isArchived == false)
+        #expect(captured.isSavedForLater == false)
         #expect(captured.scheduledDay != nil)
     }
 

@@ -44,12 +44,12 @@ struct PlannerEngine {
         let timedCalendarBlocks = calendarBlocks.filter { !$0.isAllDay }
 
         var allBlocks = (protectedBlocks + timedCalendarBlocks).sorted(by: blockSort)
-        var overflowIssues: [OverflowIssue] = []
+        var tooMuchTodayIssues: [TooMuchTodayIssue] = []
 
         let scheduledItems = localItems
             .filter { item in
                 guard let scheduledDay = item.scheduledDay else { return false }
-                return calendar.isDate(scheduledDay, inSameDayAs: day) && item.isArchived == false
+                return calendar.isDate(scheduledDay, inSameDayAs: day) && item.isSavedForLater == false
             }
             .sorted(by: localItemSort)
 
@@ -66,8 +66,8 @@ struct PlannerEngine {
             case .scheduled(let block):
                 allBlocks.append(block)
                 allBlocks.sort(by: blockSort)
-            case .overflow(let issue):
-                overflowIssues.append(issue)
+            case .tooMuchToday(let issue):
+                tooMuchTodayIssues.append(issue)
             }
         }
 
@@ -82,7 +82,7 @@ struct PlannerEngine {
         )
 
         let finalBlocks = decorateStatuses(adjusted.blocks + allDayCalendarBlocks, context: context)
-        overflowIssues.append(contentsOf: adjusted.overflowIssues)
+        tooMuchTodayIssues.append(contentsOf: adjusted.tooMuchTodayIssues)
 
         let budgetSummary = makeBudgetSummary(
             blocks: finalBlocks,
@@ -91,7 +91,7 @@ struct PlannerEngine {
 
         let warnings = makeWarnings(
             blocks: finalBlocks,
-            overflowIssues: overflowIssues,
+            tooMuchTodayIssues: tooMuchTodayIssues,
             shiftProposals: adjusted.shiftProposals,
             budgetSummary: budgetSummary,
             budget: budget,
@@ -118,7 +118,7 @@ struct PlannerEngine {
             laterBlocks: laterBlocks,
             protectedBlocks: protectedUpcoming,
             warnings: warnings,
-            overflowIssues: deduplicated(overflowIssues),
+            tooMuchTodayIssues: deduplicated(tooMuchTodayIssues),
             shiftProposals: deduplicated(adjusted.shiftProposals),
             budgetSummary: budgetSummary
         )
@@ -144,8 +144,8 @@ struct PlannerEngine {
         while candidateStart < endOfDay {
             let candidateEnd = candidateStart.adding(minutes: duration)
             if candidateEnd > limit {
-                return .overflow(
-                    OverflowIssue(
+                return .tooMuchToday(
+                    TooMuchTodayIssue(
                         itemID: item.id,
                         title: item.title,
                         message: item.forceAfterBedtime
@@ -183,8 +183,8 @@ struct PlannerEngine {
             return .scheduled(block)
         }
 
-        return .overflow(
-            OverflowIssue(
+        return .tooMuchToday(
+            TooMuchTodayIssue(
                 itemID: item.id,
                 title: item.title,
                 message: "This can wait. The day is already full.",
@@ -212,7 +212,7 @@ struct PlannerEngine {
                     && block.start <= context.now
             })
         else {
-            return OverrunResult(blocks: sortedBlocks, overflowIssues: [], shiftProposals: [], warnings: [])
+            return OverrunResult(blocks: sortedBlocks, tooMuchTodayIssues: [], shiftProposals: [], warnings: [])
         }
 
         let activeBlock = sortedBlocks[activeIndex]
@@ -222,7 +222,7 @@ struct PlannerEngine {
             context: context,
             transitionBufferMinutes: template.transitionBufferMinutes
         ) else {
-            return OverrunResult(blocks: sortedBlocks, overflowIssues: [], shiftProposals: [], warnings: [])
+            return OverrunResult(blocks: sortedBlocks, tooMuchTodayIssues: [], shiftProposals: [], warnings: [])
         }
 
         var warnings: [GuardrailWarning] = []
@@ -240,14 +240,14 @@ struct PlannerEngine {
         }
 
         guard extendedEnd > activeBlock.end else {
-            return OverrunResult(blocks: sortedBlocks, overflowIssues: [], shiftProposals: [], warnings: warnings)
+            return OverrunResult(blocks: sortedBlocks, tooMuchTodayIssues: [], shiftProposals: [], warnings: warnings)
         }
 
         var result = Array(sortedBlocks.prefix(activeIndex))
         let extendedActive = shifted(block: activeBlock, start: activeBlock.start, end: extendedEnd)
         result.append(extendedActive)
 
-        var overflowIssues: [OverflowIssue] = []
+        var tooMuchTodayIssues: [TooMuchTodayIssue] = []
         var shiftProposals: [CalendarShiftProposal] = []
         var runningEnd = extendedActive.end
 
@@ -294,8 +294,8 @@ struct PlannerEngine {
 
             let forceAfterBedtime = itemLookup[block.itemID]?.forceAfterBedtime ?? false
             if proposedEnd > sleepBoundary && forceAfterBedtime == false {
-                overflowIssues.append(
-                    OverflowIssue(
+                tooMuchTodayIssues.append(
+                    TooMuchTodayIssue(
                         itemID: block.itemID,
                         title: block.title,
                         message: "Not enough room today. This would cut into sleep or recovery.",
@@ -313,7 +313,7 @@ struct PlannerEngine {
 
         return OverrunResult(
             blocks: result.sorted(by: blockSort),
-            overflowIssues: overflowIssues,
+            tooMuchTodayIssues: tooMuchTodayIssues,
             shiftProposals: shiftProposals.filter { $0.calendarEventID.isEmpty == false },
             warnings: warnings
         )
@@ -513,7 +513,7 @@ struct PlannerEngine {
 
     private func makeWarnings(
         blocks: [PlannedBlock],
-        overflowIssues: [OverflowIssue],
+        tooMuchTodayIssues: [TooMuchTodayIssue],
         shiftProposals: [CalendarShiftProposal],
         budgetSummary: BudgetUsageSummary,
         budget: DailyBudgetSnapshot,
@@ -522,7 +522,7 @@ struct PlannerEngine {
     ) -> [GuardrailWarning] {
         var warnings: [GuardrailWarning] = []
 
-        if overflowIssues.isEmpty == false {
+        if tooMuchTodayIssues.isEmpty == false {
             warnings.append(
                 GuardrailWarning(
                     message: "Not enough room today.",
@@ -556,7 +556,7 @@ struct PlannerEngine {
             warnings.append(
                 GuardrailWarning(
                     message: "This is already a full list.",
-                    detail: "Consider leaving some ideas in the jar so the timeline stays gentle.",
+                    detail: "Consider leaving some ideas for later so the timeline stays gentle.",
                     severity: .calm
                 )
             )
@@ -641,7 +641,7 @@ struct PlannerEngine {
         return lhs.start < rhs.start
     }
 
-    private func deduplicated(_ issues: [OverflowIssue]) -> [OverflowIssue] {
+    private func deduplicated(_ issues: [TooMuchTodayIssue]) -> [TooMuchTodayIssue] {
         var seen = Set<UUID>()
         return issues.filter { seen.insert($0.itemID).inserted }
     }
@@ -654,12 +654,12 @@ struct PlannerEngine {
 
 private enum PlacementResult {
     case scheduled(PlannedBlock)
-    case overflow(OverflowIssue)
+    case tooMuchToday(TooMuchTodayIssue)
 }
 
 private struct OverrunResult {
     var blocks: [PlannedBlock]
-    var overflowIssues: [OverflowIssue]
+    var tooMuchTodayIssues: [TooMuchTodayIssue]
     var shiftProposals: [CalendarShiftProposal]
     var warnings: [GuardrailWarning]
 }

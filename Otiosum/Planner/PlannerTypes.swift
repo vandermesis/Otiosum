@@ -76,18 +76,18 @@ enum ProtectedCategory: String, Codable, CaseIterable, Identifiable, Sendable {
     }
 }
 
-enum OverflowChoice: String, Codable, CaseIterable, Identifiable, Sendable {
+enum TooMuchTodayChoice: String, Codable, CaseIterable, Identifiable, Sendable {
     case nextSuitableDay
-    case returnToJar
+    case saveForLater
     case keepAnyway
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
-        case .nextSuitableDay: "Move to another day"
-        case .returnToJar: "Move to archive"
-        case .keepAnyway: "Keep anyway"
+        case .nextSuitableDay: "Move to Another Day"
+        case .saveForLater: "Save for Later"
+        case .keepAnyway: "Keep Today"
         }
     }
 }
@@ -101,9 +101,9 @@ enum CalendarShiftDecision: String, Codable, CaseIterable, Identifiable, Sendabl
 
     var title: String {
         switch self {
-        case .moveOnlyInOtiosum: "Move only in Otiosum"
-        case .editRealEvent: "Edit Calendar event"
-        case .keepFixed: "Keep fixed"
+        case .moveOnlyInOtiosum: "Move in Planner Only"
+        case .editRealEvent: "Change Calendar Event"
+        case .keepFixed: "Keep Current Time"
         }
     }
 }
@@ -192,7 +192,7 @@ struct EventSnapshot: Identifiable, Equatable, Sendable {
     let notes: String
     let isCompleted: Bool
     let orderHint: Double
-    let isArchived: Bool
+    let isSavedForLater: Bool
     let forceAfterBedtime: Bool
 
     var isProtected: Bool {
@@ -304,7 +304,7 @@ struct GuardrailWarning: Identifiable, Equatable, Sendable {
     let severity: GuardrailSeverity
 }
 
-struct OverflowIssue: Identifiable, Equatable, Sendable {
+struct TooMuchTodayIssue: Identifiable, Equatable, Sendable {
     let id = UUID()
     let itemID: UUID
     let title: String
@@ -338,7 +338,7 @@ struct DayPlan: Equatable, Sendable {
     let laterBlocks: [PlannedBlock]
     let protectedBlocks: [PlannedBlock]
     let warnings: [GuardrailWarning]
-    let overflowIssues: [OverflowIssue]
+    let tooMuchTodayIssues: [TooMuchTodayIssue]
     let shiftProposals: [CalendarShiftProposal]
     let budgetSummary: BudgetUsageSummary
 }

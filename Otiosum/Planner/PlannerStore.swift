@@ -7,7 +7,7 @@ import SwiftData
 final class PlannerStore {
     var selectedDay: Date = .now
     var todayQuickCapture: String = ""
-    var pendingOverflow: PendingOverflowState?
+    var pendingTooMuchToday: PendingTooMuchTodayState?
     var pendingCalendarShift: PendingCalendarShiftState?
     var lastUserInteraction: Date?
     var didSeedDefaults = false
@@ -74,7 +74,7 @@ final class PlannerStore {
             flexibility: .flexible,
             notes: "",
             isCompleted: false,
-            isArchived: false
+            isSavedForLater: false
         )
 
         modelContext.insert(event)
@@ -82,13 +82,13 @@ final class PlannerStore {
         todayQuickCapture = ""
     }
 
-    func restoreArchivedEvent(
+    func restoreLaterEvent(
         _ event: Event,
         lane: DropLane,
         on day: Date,
         modelContext: ModelContext
     ) {
-        event.isArchived = false
+        event.isSavedForLater = false
         event.scheduledDay = day
         event.preferredTimeWindow = lane.timeWindow
         event.preferredStartMinutes = lane.timeWindow.startMinutes
@@ -96,7 +96,7 @@ final class PlannerStore {
         try? modelContext.save()
     }
 
-    func archiveQuickEvent(modelContext: ModelContext) {
+    func saveQuickEventForLater(modelContext: ModelContext) {
         let title = todayQuickCapture.trimmingCharacters(in: .whitespacesAndNewlines)
         guard title.isEmpty == false else { return }
 
@@ -114,7 +114,7 @@ final class PlannerStore {
             flexibility: .flexible,
             notes: "",
             isCompleted: false,
-            isArchived: true
+            isSavedForLater: true
         )
 
         modelContext.insert(event)
@@ -130,7 +130,7 @@ final class PlannerStore {
     ) {
         event.scheduledDay = day
         event.preferredStartMinutes = (event.preferredStartMinutes ?? roundedStartMinutes(template: .default)) + minutes
-        event.isArchived = false
+        event.isSavedForLater = false
         try? modelContext.save()
     }
 
@@ -143,7 +143,7 @@ final class PlannerStore {
         event.scheduledDay = calendar.startOfDay(for: start)
         event.preferredStartMinutes = max(0, min(23 * 60 + 55, start.minutesSinceStartOfDay(using: calendar)))
         event.preferredTimeWindow = inferredWindow(for: start)
-        event.isArchived = false
+        event.isSavedForLater = false
         event.forceAfterBedtime = false
         try? modelContext.save()
     }
@@ -175,7 +175,7 @@ final class PlannerStore {
         event.preferredStartMinutes = max(0, min(23 * 60 + 55, start.minutesSinceStartOfDay(using: calendar)))
         event.preferredTimeWindow = inferredWindow(for: start)
         event.isCompleted = false
-        event.isArchived = false
+        event.isSavedForLater = false
         event.forceAfterBedtime = false
         try? modelContext.save()
     }
@@ -191,11 +191,11 @@ final class PlannerStore {
         try? modelContext.save()
     }
 
-    func archiveEvent(
+    func saveEventForLater(
         _ event: Event,
         modelContext: ModelContext
     ) {
-        event.isArchived = true
+        event.isSavedForLater = true
         event.scheduledDay = nil
         event.forceAfterBedtime = false
         try? modelContext.save()
@@ -218,8 +218,8 @@ final class PlannerStore {
     ) {
         _ = modelContext
 
-        if let issue = plan.overflowIssues.first {
-            pendingOverflow = PendingOverflowState(
+        if let issue = plan.tooMuchTodayIssues.first {
+            pendingTooMuchToday = PendingTooMuchTodayState(
                 itemID: issue.itemID,
                 title: issue.title,
                 message: issue.message,
@@ -228,7 +228,7 @@ final class PlannerStore {
                 defaultChoice: .nextSuitableDay
             )
         } else {
-            pendingOverflow = nil
+            pendingTooMuchToday = nil
         }
 
         if let proposal = plan.shiftProposals.first {
@@ -238,36 +238,36 @@ final class PlannerStore {
         }
     }
 
-    func applyOverflowChoice(
-        _ choice: OverflowChoice,
+    func applyTooMuchTodayChoice(
+        _ choice: TooMuchTodayChoice,
         modelContext: ModelContext
     ) {
         guard
-            let pendingOverflow,
-            let event = findEvent(with: pendingOverflow.itemID, in: modelContext)
+            let pendingTooMuchToday,
+            let event = findEvent(with: pendingTooMuchToday.itemID, in: modelContext)
         else {
-            self.pendingOverflow = nil
+            self.pendingTooMuchToday = nil
             return
         }
 
         switch choice {
         case .nextSuitableDay:
-            event.scheduledDay = pendingOverflow.suggestedDate
+            event.scheduledDay = pendingTooMuchToday.suggestedDate
             event.preferredStartMinutes = nil
             event.forceAfterBedtime = false
-            event.isArchived = false
-        case .returnToJar:
+            event.isSavedForLater = false
+        case .saveForLater:
             event.scheduledDay = nil
-            event.isArchived = true
+            event.isSavedForLater = true
             event.forceAfterBedtime = false
         case .keepAnyway:
             event.scheduledDay = selectedDay
             event.forceAfterBedtime = true
-            event.isArchived = false
+            event.isSavedForLater = false
         }
 
         try? modelContext.save()
-        self.pendingOverflow = nil
+        self.pendingTooMuchToday = nil
     }
 
     func applyCalendarDecision(
@@ -382,14 +382,14 @@ final class PlannerStore {
     }
 }
 
-struct PendingOverflowState: Identifiable {
+struct PendingTooMuchTodayState: Identifiable {
     let id = UUID()
     let itemID: UUID
     let title: String
     let message: String
     let suggestedDate: Date
     let displacedCategory: ProtectedCategory?
-    let defaultChoice: OverflowChoice
+    let defaultChoice: TooMuchTodayChoice
 }
 
 struct PendingCalendarShiftState: Identifiable {

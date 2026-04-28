@@ -96,7 +96,7 @@ struct WarningCard: View {
 struct DropLaneSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Drop from the jar")
+            Text("Drop from Later")
                 .font(.headline)
             Text("Drag a ball into one of these lanes to place it gently into today.")
                 .font(.footnote)
@@ -134,7 +134,7 @@ struct ScheduleSection: View {
     let blocks: [PlannedBlock]
     let onToggleComplete: (PlannedBlock) -> Void
     let onMoveLater: (PlannedBlock) -> Void
-    let onReturnToJar: (PlannedBlock) -> Void
+    let onSaveForLater: (PlannedBlock) -> Void
     let onCalendarFlexibility: (PlannedBlock, PlannerFlexibility) -> Void
 
     var body: some View {
@@ -156,7 +156,7 @@ struct ScheduleSection: View {
                         block: block,
                         onToggleComplete: onToggleComplete,
                         onMoveLater: onMoveLater,
-                        onReturnToJar: onReturnToJar,
+                        onSaveForLater: onSaveForLater,
                         onCalendarFlexibility: onCalendarFlexibility
                     )
                 }
@@ -169,7 +169,7 @@ struct ScheduleBlockCard: View {
     let block: PlannedBlock
     let onToggleComplete: (PlannedBlock) -> Void
     let onMoveLater: (PlannedBlock) -> Void
-    let onReturnToJar: (PlannedBlock) -> Void
+    let onSaveForLater: (PlannedBlock) -> Void
     let onCalendarFlexibility: (PlannedBlock, PlannerFlexibility) -> Void
 
     var body: some View {
@@ -199,8 +199,8 @@ struct ScheduleBlockCard: View {
                     }
                     .buttonStyle(.bordered)
 
-                    Button("Jar") {
-                        onReturnToJar(block)
+                    Button("Later") {
+                        onSaveForLater(block)
                     }
                     .buttonStyle(.bordered)
                 } else if block.source == .calendar {
@@ -295,7 +295,7 @@ struct MiniBlockRow: View {
     }
 }
 
-struct JarBallCard: View {
+struct LaterBallCard: View {
     let item: Event
 
     var body: some View {
@@ -305,7 +305,7 @@ struct JarBallCard: View {
             HStack {
                 PlannerIcon(symbolName: icon.symbolName, tintToken: icon.tintToken)
                 Spacer()
-                Text("Archive")
+                Text("Later")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
             }
@@ -333,7 +333,7 @@ struct JarBallCard: View {
         )
         .accessibilityElement(children: .combine)
         .accessibilityLabel(item.title)
-        .accessibilityIdentifier("jar-ball-\(item.title.testingIdentifier)")
+        .accessibilityIdentifier("later-ball-\(item.title.testingIdentifier)")
     }
 }
 

@@ -1,28 +1,28 @@
 import SwiftUI
 
-struct OverflowDecisionSheet: View {
-    let state: PendingOverflowState
-    let onChoose: (OverflowChoice) -> Void
+struct TooMuchTodayDecisionSheet: View {
+    let state: PendingTooMuchTodayState
+    let onChoose: (TooMuchTodayChoice) -> Void
 
     var body: some View {
         NavigationStack {
             List {
-                Section("Not enough room today") {
+                Section("Today is already full") {
                     Text(state.title)
                         .font(.headline)
                     Text(state.message)
                         .foregroundStyle(.secondary)
                 }
 
-                Section("Choose what feels best") {
-                    ForEach(OverflowChoice.allCases) { choice in
+                Section("Choose the gentlest next step") {
+                    ForEach(TooMuchTodayChoice.allCases) { choice in
                         Button(choice.title) {
                             onChoose(choice)
                         }
                     }
                 }
             }
-            .navigationTitle("Overflow")
+            .navigationTitle("Too Much Today")
             .navigationBarTitleDisplayMode(.inline)
         }
         .presentationDetents([.medium])
@@ -36,16 +36,16 @@ struct CalendarShiftDecisionSheet: View {
     var body: some View {
         NavigationStack {
             List {
-                Section("Synced event") {
+                Section("Calendar event") {
                     Text(state.proposal.title)
                         .font(.headline)
-                    Text("Otiosum moved this later so the day stays calm.")
+                    Text("Today was adjusted to protect the rest of the day.")
                         .foregroundStyle(.secondary)
                     Text("Suggested time: \(state.proposal.suggestedStart.formatted(.dateTime.hour().minute())) - \(state.proposal.suggestedEnd.formatted(.dateTime.hour().minute()))")
                         .font(.footnote)
                 }
 
-                Section("Apply change") {
+                Section("Choose how to handle it") {
                     ForEach(CalendarShiftDecision.allCases) { decision in
                         Button(decision.title) {
                             onChoose(decision)
@@ -53,7 +53,7 @@ struct CalendarShiftDecisionSheet: View {
                     }
                 }
             }
-            .navigationTitle("Calendar shift")
+            .navigationTitle("Calendar Change")
             .navigationBarTitleDisplayMode(.inline)
         }
         .presentationDetents([.medium])

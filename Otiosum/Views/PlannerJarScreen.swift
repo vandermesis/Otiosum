@@ -1,13 +1,13 @@
 import SwiftUI
 
-struct SomedayDrawerContent: View {
+struct LaterDrawerContent: View {
     let items: [Event]
     let onSchedule: (Event, DropLane) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("Archive")
+                Text("Later")
                     .font(.headline)
                 Spacer()
                 Text("\(items.count)")
@@ -17,8 +17,8 @@ struct SomedayDrawerContent: View {
 
             if items.isEmpty {
                 CalmEmptyState(
-                    title: "Archive is clear",
-                    message: "Archive events with Quick Add and restore them when you want them back on the timeline."
+                    title: "Later is clear",
+                    message: "Save ideas for later and bring them back to Today when they fit."
                 )
             } else {
                 ScrollView(.vertical) {
@@ -27,7 +27,7 @@ struct SomedayDrawerContent: View {
                         spacing: 14
                     ) {
                         ForEach(items) { item in
-                            SomedayItemBall(item: item) {
+                            LaterItemBall(item: item) {
                                 onSchedule(item, lane(for: item))
                             }
                         }
@@ -58,7 +58,7 @@ struct SomedayDrawerContent: View {
     }
 }
 
-private struct SomedayItemBall: View {
+private struct LaterItemBall: View {
     let item: Event
     let onAddToNow: () -> Void
 
@@ -84,11 +84,11 @@ private struct SomedayItemBall: View {
             }
             .buttonStyle(.borderedProminent)
             .clipShape(.circle)
-            .accessibilityIdentifier("someday-add-\(item.title.testingIdentifier)")
+            .accessibilityIdentifier("later-add-\(item.title.testingIdentifier)")
         }
         .padding(.vertical, 6)
         .draggable(item.id.uuidString)
         .accessibilityElement(children: .combine)
-        .accessibilityIdentifier("someday-item-\(item.title.testingIdentifier)")
+        .accessibilityIdentifier("later-item-\(item.title.testingIdentifier)")
     }
 }

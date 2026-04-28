@@ -7,10 +7,10 @@ struct TodayScreen: View {
     let timelineBlocks: [PlannedBlock]
     let budget: DailyBudgetSnapshot
     let calendarService: SystemCalendarService
-    let onOpenArchive: () -> Void
+    let onOpenLater: () -> Void
     let onOpenSettings: () -> Void
     let onRequestCalendarAccess: () -> Void
-    let onDropSomedayItem: (UUID, Date) -> Bool
+    let onDropLaterItem: (UUID, Date) -> Bool
     let onRescheduleBlock: (PlannedBlock, Date) -> Void
     let onAdjustBlockDuration: (PlannedBlock, Int) -> Void
     let onQuickAction: (PlannedBlock, TimelineQuickAction) -> Void
@@ -24,7 +24,7 @@ struct TodayScreen: View {
                 day: day,
                 plan: plan,
                 timelineBlocks: timelineBlocks,
-                onDropSomedayItem: onDropSomedayItem,
+                onDropLaterItem: onDropLaterItem,
                 onRescheduleBlock: onRescheduleBlock,
                 onAdjustBlockDuration: onAdjustBlockDuration,
                 onQuickAction: onQuickAction,
@@ -33,8 +33,10 @@ struct TodayScreen: View {
             .ignoresSafeArea(edges: .vertical)
 
             VStack(spacing: 10) {
-                TimelineActionOverlay(
-                    onOpenArchive: onOpenArchive,
+                TodayHeaderOverlay(
+                    day: day,
+                    plan: plan,
+                    onOpenLater: onOpenLater,
                     onOpenSettings: onOpenSettings
                 )
 
@@ -54,37 +56,99 @@ struct TodayScreen: View {
     }
 }
 
-private struct TimelineActionOverlay: View {
-    let onOpenArchive: () -> Void
+private struct TodayHeaderOverlay: View {
+    let day: Date
+    let plan: DayPlan
+    let onOpenLater: () -> Void
     let onOpenSettings: () -> Void
 
     var body: some View {
-        HStack(spacing: 8) {
-            Button("Archive", systemImage: "archivebox") {
-                onOpenArchive()
-            }
-            .labelStyle(.iconOnly)
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-            .frame(width: 44, height: 44)
-            .accessibilityIdentifier("now-open-someday")
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Today")
+                        .font(.system(.largeTitle, design: .rounded).bold())
+                    Text(day.formatted(.dateTime.weekday(.wide).day().month()))
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
 
-            Button("Settings", systemImage: "gearshape") {
-                onOpenSettings()
+                Spacer()
+
+                HStack(spacing: 8) {
+                    Button("Settings", systemImage: "gearshape") {
+                        onOpenSettings()
+                    }
+                    .labelStyle(.iconOnly)
+                    .buttonStyle(.bordered)
+                    .controlSize(.large)
+                    .frame(width: 48, height: 48)
+                    .clipShape(.circle)
+                    .accessibilityIdentifier("today-open-settings")
+
+                    Button("Later", systemImage: "archivebox") {
+                        onOpenLater()
+                    }
+                    .labelStyle(.iconOnly)
+                    .buttonStyle(.bordered)
+                    .controlSize(.large)
+                    .frame(width: 48, height: 48)
+                    .clipShape(.circle)
+                    .accessibilityIdentifier("today-open-later")
+                }
             }
-            .labelStyle(.iconOnly)
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-            .frame(width: 44, height: 44)
-            .accessibilityIdentifier("now-open-settings")
+
+            TodayStatusCard(plan: plan)
         }
-        .padding(6)
-        .background(.regularMaterial, in: Capsule())
+    }
+}
+
+private struct TodayStatusCard: View {
+    let plan: DayPlan
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(plan.nowBlock == nil ? "Open right now" : "Now")
+                    .font(.caption.bold())
+                    .foregroundStyle(.secondary)
+                    .textCase(.uppercase)
+                Text(plan.nowBlock?.title ?? "There is room to start gently.")
+                    .font(.headline)
+                if let nowBlock = plan.nowBlock {
+                    Text(timeRange(for: nowBlock))
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Spacer()
+
+            VStack(alignment: .trailing, spacing: 6) {
+                Text(plan.nextBlock == nil ? "Later" : "Next")
+                    .font(.caption.bold())
+                    .foregroundStyle(.secondary)
+                    .textCase(.uppercase)
+                Text(plan.nextBlock?.title ?? "Nothing urgent is queued.")
+                    .font(.subheadline)
+                    .multilineTextAlignment(.trailing)
+                if plan.warnings.isEmpty == false {
+                    Text("\(plan.warnings.count) gentle check\(plan.warnings.count == 1 ? "" : "s")")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .padding(14)
+        .background(.regularMaterial, in: .rect(cornerRadius: 24))
         .overlay {
-            Capsule()
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .strokeBorder(.white.opacity(0.48), lineWidth: 1)
         }
-        .frame(maxWidth: .infinity, alignment: .trailing)
+    }
+
+    private func timeRange(for block: PlannedBlock) -> String {
+        "\(block.start.formatted(.dateTime.hour().minute())) - \(block.end.formatted(.dateTime.hour().minute()))"
     }
 }
 
@@ -92,7 +156,7 @@ private struct NowTimelineSection: View {
     let day: Date
     let plan: DayPlan
     let timelineBlocks: [PlannedBlock]
-    let onDropSomedayItem: (UUID, Date) -> Bool
+    let onDropLaterItem: (UUID, Date) -> Bool
     let onRescheduleBlock: (PlannedBlock, Date) -> Void
     let onAdjustBlockDuration: (PlannedBlock, Int) -> Void
     let onQuickAction: (PlannedBlock, TimelineQuickAction) -> Void
@@ -106,7 +170,7 @@ private struct NowTimelineSection: View {
             currentBlockID: plan.nowBlock?.id,
             nextBlockID: plan.nextBlock?.id,
             showsHeader: false,
-            onDropSomedayItem: onDropSomedayItem,
+            onDropLaterItem: onDropLaterItem,
             onRescheduleBlock: onRescheduleBlock,
             onAdjustBlockDuration: onAdjustBlockDuration,
             onQuickAction: onQuickAction,

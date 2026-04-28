@@ -11,7 +11,7 @@ struct PlannerShellView: View {
     @Query(sort: \DailyBudget.key) private var budgets: [DailyBudget]
 
     @State private var viewModel = PlannerShellViewModel()
-    @State private var isSomedaySheetPresented = false
+    @State private var isLaterSheetPresented = false
     @State private var isSettingsPresented = false
     @State private var timelineCenterDate = Date.now
     @FocusState private var isQuickCaptureFocused: Bool
@@ -54,8 +54,8 @@ struct PlannerShellView: View {
             }
     }
 
-    private var archivedEvents: [Event] {
-        items.filter { $0.isArchived || $0.scheduledDay == nil }
+    private var laterEvents: [Event] {
+        items.filter { $0.isSavedForLater || $0.scheduledDay == nil }
     }
 
     private var promptKey: String {
@@ -81,8 +81,8 @@ struct PlannerShellView: View {
                         timelineBlocks: timelineBlocks,
                         budget: budgetSnapshot,
                         calendarService: viewModel.calendarService,
-                        onOpenArchive: {
-                            isSomedaySheetPresented = true
+                        onOpenLater: {
+                            isLaterSheetPresented = true
                         },
                         onOpenSettings: {
                             isSettingsPresented = true
@@ -92,9 +92,9 @@ struct PlannerShellView: View {
                                 await viewModel.requestCalendarAccess()
                             }
                         },                        
-                        onDropSomedayItem: { itemID, date in
+                        onDropLaterItem: { itemID, date in
                             guard let event = eventLookup[itemID] else { return false }
-                            viewModel.scheduleArchivedEvent(event, at: date, modelContext: modelContext)
+                            viewModel.scheduleLaterEvent(event, at: date, modelContext: modelContext)
                             return true
                         },
                         onRescheduleBlock: { block, start in
@@ -142,26 +142,32 @@ struct PlannerShellView: View {
                         }
                     )
                     .toolbar(.hidden, for: .navigationBar)
-                }
-                .overlay(alignment: .bottom) {
-                    QuickCaptureToolbarContent(
-                        text: todayQuickCaptureBinding,
-                        isTextFieldFocused: $isQuickCaptureFocused,
-                        suggestion: todayQuickCaptureSuggestion,
-                        onAddToToday: {
-                            isQuickCaptureFocused = false
-                            addSearchTextToTimeline(
-                                templateSnapshot: templateSnapshot,
-                                budgetSnapshot: budgetSnapshot
-                            )
-                        },
-                        onAddToArchive: {
-                            isQuickCaptureFocused = false
-                            addSearchTextToArchiveIfNeeded()
+                    .safeAreaInset(edge: .bottom) {
+                        QuickCaptureToolbarContent(
+                            text: todayQuickCaptureBinding,
+                            isTextFieldFocused: $isQuickCaptureFocused,
+                            suggestion: todayQuickCaptureSuggestion,
+                            onAddToToday: {
+                                isQuickCaptureFocused = false
+                                addSearchTextToTimeline(
+                                    templateSnapshot: templateSnapshot,
+                                    budgetSnapshot: budgetSnapshot
+                                )
+                            },
+                            onAddToLater: {
+                                isQuickCaptureFocused = false
+                                addSearchTextToLaterIfNeeded()
+                            }
+                        )
+                        .padding(.horizontal, 12)
+                        .padding(.top, 8)
+                        .padding(.bottom, 10)
+                        .background {
+                            Rectangle()
+                                .fill(.clear)
+                                .background(.thinMaterial.opacity(0.001))
                         }
-                    )
-                    .padding(.horizontal, 12)
-                    .padding(.bottom, 10)
+                    }
                 }
             }
         }
@@ -178,11 +184,11 @@ struct PlannerShellView: View {
         .onChange(of: scenePhase) { _, _ in
             viewModel.registerInteraction()
         }
-        .sheet(item: pendingOverflowBinding) { pendingOverflow in
-            OverflowDecisionSheet(
-                state: pendingOverflow,
+        .sheet(item: pendingTooMuchTodayBinding) { pendingTooMuchToday in
+            TooMuchTodayDecisionSheet(
+                state: pendingTooMuchToday,
                 onChoose: { choice in
-                    viewModel.applyOverflowChoice(choice, modelContext: modelContext)
+                    viewModel.applyTooMuchTodayChoice(choice, modelContext: modelContext)
                 }
             )
         }
@@ -196,17 +202,17 @@ struct PlannerShellView: View {
                 }
             )
         }
-        .sheet(isPresented: $isSomedaySheetPresented) {
+        .sheet(isPresented: $isLaterSheetPresented) {
             NavigationStack {
-                SomedayDrawerContent(items: archivedEvents) { item, lane in
-                    viewModel.restoreArchivedEvent(item, lane: lane, modelContext: modelContext)
+                LaterDrawerContent(items: laterEvents) { item, lane in
+                    viewModel.restoreLaterEvent(item, lane: lane, modelContext: modelContext)
                 }
                 .padding(16)
-                .navigationTitle("Archive")
+                .navigationTitle("Later")
                 .toolbar {
                     ToolbarItem(placement: .topBarTrailing) {
                         Button("Done") {
-                            isSomedaySheetPresented = false
+                            isLaterSheetPresented = false
                         }
                     }
                 }
@@ -248,10 +254,10 @@ struct PlannerShellView: View {
         )
     }
 
-    private var pendingOverflowBinding: Binding<PendingOverflowState?> {
+    private var pendingTooMuchTodayBinding: Binding<PendingTooMuchTodayState?> {
         Binding(
-            get: { viewModel.pendingOverflow },
-            set: { viewModel.pendingOverflow = $0 }
+            get: { viewModel.pendingTooMuchToday },
+            set: { viewModel.pendingTooMuchToday = $0 }
         )
     }
 
@@ -276,9 +282,9 @@ struct PlannerShellView: View {
         )
     }
 
-    private func addSearchTextToArchiveIfNeeded() {
+    private func addSearchTextToLaterIfNeeded() {
         guard viewModel.todayQuickCapture.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else { return }
-        viewModel.archiveQuickEvent(modelContext: modelContext)
+        viewModel.saveQuickEventForLater(modelContext: modelContext)
     }
 }
 
@@ -287,47 +293,51 @@ private struct QuickCaptureToolbarContent: View {
     let isTextFieldFocused: FocusState<Bool>.Binding
     let suggestion: IconSuggestion?
     let onAddToToday: () -> Void
-    let onAddToArchive: () -> Void
+    let onAddToLater: () -> Void
 
     private var hasText: Bool {
         text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
     }
 
     var body: some View {
-        HStack(spacing: 8) {
-            QuickCaptureField(
-                text: $text,
-                isTextFieldFocused: isTextFieldFocused,
-                suggestion: suggestion,
-                onSubmit: onAddToToday
-            )
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Add Task")
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
+                .textCase(.uppercase)
 
-            Button("Add", systemImage: "plus") {
-                onAddToToday()
+            HStack(alignment: .bottom, spacing: 10) {
+                QuickCaptureField(
+                    text: $text,
+                    isTextFieldFocused: isTextFieldFocused,
+                    suggestion: suggestion,
+                    onSubmit: onAddToToday
+                )
+
+                Button("Add to Today") {
+                    onAddToToday()
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(hasText == false)
+                .controlSize(.large)
+                .accessibilityIdentifier("quick-add-today")
             }
-            .buttonStyle(.borderedProminent)
-            .labelStyle(.iconOnly)
-            .disabled(hasText == false)
-            .frame(width: 44, height: 44)
-            .clipShape(.circle)
-            .accessibilityIdentifier("quick-add-today")
 
-            Button("Archive for later", systemImage: "archivebox") {
-                onAddToArchive()
+            Button("Save for Later", systemImage: "archivebox") {
+                onAddToLater()
             }
             .buttonStyle(.bordered)
-            .labelStyle(.iconOnly)
             .disabled(hasText == false)
-            .frame(width: 44, height: 44)
-            .clipShape(.circle)
-            .accessibilityIdentifier("quick-add-someday")
+            .frame(maxWidth: .infinity)
+            .accessibilityIdentifier("quick-add-later")
         }
-        .padding(8)
-        .background(.regularMaterial, in: .rect(cornerRadius: 24))
+        .padding(12)
+        .background(.regularMaterial, in: .rect(cornerRadius: 28))
         .overlay {
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
                 .strokeBorder(.white.opacity(0.48), lineWidth: 1)
         }
+        .shadow(color: .black.opacity(0.05), radius: 18, y: 6)
     }
 }
 
@@ -339,11 +349,11 @@ private struct QuickCaptureField: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Image(systemName: "text.badge.plus")
+            Image(systemName: "square.and.pencil")
                 .foregroundStyle(.secondary)
                 .accessibilityHidden(true)
 
-            TextField("Add something to today", text: $text)
+            TextField("One short phrase", text: $text)
                 .focused(isTextFieldFocused)
                 .submitLabel(.done)
                 .onSubmit(onSubmit)
@@ -355,9 +365,9 @@ private struct QuickCaptureField: View {
             }
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 8)
-        .frame(minHeight: 44)
-        .background(.background.opacity(0.78), in: Capsule())
+        .padding(.vertical, 10)
+        .frame(minHeight: 54)
+        .background(.background.opacity(0.92), in: Capsule())
         .overlay {
             Capsule()
                 .strokeBorder(.separator.opacity(0.35), lineWidth: 1)
