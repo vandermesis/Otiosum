@@ -441,7 +441,7 @@ private struct TimelineCanvasView: View {
                     }
 
                     ForEach(gapItems) { gap in
-                        TimelineGapCard(item: gap)
+                        TimelineGapCard(item: gap, width: laneWidth)
                             .offset(x: TimelineLayoutMetrics.laneLeadingInset, y: yOffset(for: gap.date))
                     }
 
@@ -877,6 +877,7 @@ private struct TimelineTaskCapsule: View {
 
 private struct TimelineGapCard: View {
     let item: TimelineGapItem
+    let width: CGFloat
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
@@ -894,7 +895,7 @@ private struct TimelineGapCard: View {
             }
         }
         .padding(8)
-        .frame(width: 220, alignment: .leading)
+        .frame(width: width, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill((item.isWarning ? Color.orange : .mint).opacity(0.16))

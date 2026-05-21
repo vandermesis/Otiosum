@@ -47,9 +47,27 @@ struct TodayScreen: View {
             .padding(.top, 6)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
-        .navigationTitle(timelineTitleDate.formatted(.dateTime.weekday(.wide).day().month()))
-        .navigationSubtitle(navigationSubtitle(for: plan))
+        .navigationTitle(displayedDateTitle)
+        .toolbarTitleDisplayMode(.inlineLarge)
         .toolbar {
+            ToolbarItem(placement: .largeTitle) {
+                ToolbarDateTitle(title: displayedDateTitle)
+            }
+
+            ToolbarItem(placement: .title) {
+                ToolbarDateTitle(title: displayedDateTitle)
+            }
+
+            if let displayedTaskTitle {
+                ToolbarItem(placement: .largeSubtitle) {
+                    ToolbarTaskSubtitle(title: displayedTaskTitle)
+                }
+
+                ToolbarItem(placement: .subtitle) {
+                    ToolbarTaskSubtitle(title: displayedTaskTitle)
+                }
+            }
+
             ToolbarItemGroup(placement: .topBarTrailing) {
                 Button("Settings", systemImage: "gearshape") {
                     onOpenSettings()
@@ -64,16 +82,33 @@ struct TodayScreen: View {
         }
     }
 
-    private func navigationSubtitle(for plan: DayPlan) -> String {
-        guard let nowBlock = plan.nowBlock else {
-            return "Open right now: There is room to start gently."
-        }
-
-        return "Now: \(nowBlock.title), \(timeRange(for: nowBlock))"
+    private var displayedTaskTitle: String? {
+        plan.nowBlock?.title ?? plan.nextBlock?.title
     }
 
-    private func timeRange(for block: PlannedBlock) -> String {
-        "\(block.start.formatted(.dateTime.hour().minute())) - \(block.end.formatted(.dateTime.hour().minute()))"
+    private var displayedDateTitle: String {
+        timelineTitleDate.formatted(.dateTime.weekday(.wide).day().month())
+    }
+}
+
+private struct ToolbarDateTitle: View {
+    let title: String
+
+    var body: some View {
+        Text(title)
+            .font(.title3)
+            .bold()
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct ToolbarTaskSubtitle: View {
+    let title: String
+
+    var body: some View {
+        Text(title)
+            .font(.headline)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
