@@ -128,13 +128,14 @@ struct TimeWheelView: View {
                         date: scrollAnchorDate ?? now
                     )
                 }
-                .overlay(alignment: .center) {
+                .overlay(alignment: .trailing) {
                     if shouldShowBackToNow(for: now) {
                         Button("Back to Now", systemImage: "arrow.clockwise") {
                             jumpToNow(using: now)
                         }
                         .buttonStyle(.borderedProminent)
                         .controlSize(.small)
+                        .padding(.trailing, 12)
                         .accessibilityHint("Centers the timeline around the current time")
                     }
                 }
@@ -927,25 +928,34 @@ private struct TimelineCenterNowLine: View {
 
     var body: some View {
         Color.clear
-            .frame(height: 44)
+            .frame(height: 52)
             .overlay(alignment: .center) {
-                Rectangle()
-                    .fill(markerLineColor)
-                    .frame(height: 1.5)
+                HStack(spacing: TimelineLayoutMetrics.scaleToLaneSpacing) {
+                    Text(title)
+                        .font(.caption.bold())
+                        .monospacedDigit()
+                        .lineLimit(1)
+                        .hidden()
+                        .overlay(alignment: .center) {
+                            Text(title)
+                                .font(.title3.bold())
+                                .monospacedDigit()
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
+                                .foregroundStyle(.primary)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 6)
+                                .glassEffect(.clear)
+                                .shadow(color: Color.black.opacity(0.08), radius: 12, y: 4)
+                                .fixedSize(horizontal: true, vertical: false)
+                        }
+                        .frame(width: TimelineLayoutMetrics.labelColumnWidth, alignment: .trailing)
+
+                    Rectangle()
+                        .fill(markerLineColor)
+                        .frame(height: 1.5)
+                }
             }
-            .overlay(alignment: .center) {
-                Text(title)
-                    .font(.subheadline.bold())
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .background(
-                        Capsule()
-                            .fill(Color(red: 0.36, green: 0.56, blue: 0.40).opacity(0.94))
-                    )
-                    .shadow(color: Color(red: 0.36, green: 0.56, blue: 0.40).opacity(0.24), radius: 12, y: 4)
-            }
-            .padding(.horizontal, 8)
             .allowsHitTesting(false)
             .accessibilityLabel("Timeline center")
             .accessibilityValue(accessibilityValue)
@@ -956,11 +966,6 @@ private struct TimelineCenterNowLine: View {
     }
 
     private var title: String {
-        let roundedNow = Calendar.current.date(bySetting: .second, value: 0, of: .now) ?? .now
-        if abs(date.timeIntervalSince(roundedNow)) < 300 {
-            return "Now \(date.formatted(.dateTime.hour().minute()))"
-        }
-
         return date.formatted(.dateTime.hour().minute())
     }
 
