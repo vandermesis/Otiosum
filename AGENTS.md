@@ -18,9 +18,9 @@ Run commands from the repository root.
 
 `xcodebuild -project Otiosum.xcodeproj -scheme Otiosum -configuration Debug build` builds the app target.
 
-`xcodebuild -project Otiosum.xcodeproj -scheme Otiosum -destination 'platform=iOS Simulator,name=iPhone 16' test` runs unit and UI tests on the simulator.
+`xcodebuild -project Otiosum.xcodeproj -scheme Otiosum -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test` runs unit and UI tests on the simulator.
 
-`xcodebuild -project Otiosum.xcodeproj -scheme Otiosum -destination 'platform=iOS Simulator,name=iPhone 16' test -only-testing:OtiosumTests` runs only unit tests for faster validation.
+`xcodebuild -project Otiosum.xcodeproj -scheme Otiosum -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test -only-testing:OtiosumTests` runs only unit tests for faster validation.
 
 ## Coding Style & Naming Conventions
 Use Swift style with 4-space indentation, `UpperCamelCase` for types, and `lowerCamelCase` for properties, methods, and local variables. Prefer one primary type per file and keep names domain-specific, for example `PlannerStore`, `PlannerEngine`, and `IconSuggester`.

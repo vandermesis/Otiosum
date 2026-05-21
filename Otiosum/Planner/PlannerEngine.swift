@@ -205,7 +205,7 @@ struct PlannerEngine {
     ) -> OverrunResult {
         let sortedBlocks = blocks.sorted(by: blockSort)
         guard
-            let activeIndex = sortedBlocks.lastIndex(where: { block in
+            let activeIndex = sortedBlocks.firstIndex(where: { block in
                 block.source == .local
                     && block.isCompleted == false
                     && block.isProtected == false

@@ -242,6 +242,74 @@ struct PlannerEngineTests {
         #expect(localBlock.start >= lunchBlock.end)
     }
 
+    @Test("Local protected category blocks move with time like other local tasks")
+    func localProtectedCategoryBlocksArePushedByTime() throws {
+        let day = try makeDate(year: 2026, month: 4, day: 22, hour: 0, minute: 0)
+        let restItemID = UUID()
+        let followUpItemID = UUID()
+        let restItem = EventSnapshot(
+            id: restItemID,
+            title: "Recovery walk",
+            source: .local,
+            suggestedIcon: "leaf.fill",
+            tintToken: "sage",
+            targetDurationMinutes: 30,
+            minimumDurationMinutes: 15,
+            scheduledDay: day,
+            preferredStartMinutes: 9 * 60,
+            preferredTimeWindow: .morning,
+            flexibility: .flexible,
+            calendarEventID: nil,
+            protectedCategory: .rest,
+            notes: "",
+            isCompleted: false,
+            orderHint: 1,
+            isSavedForLater: false,
+            forceAfterBedtime: false
+        )
+        let followUpItem = EventSnapshot(
+            id: followUpItemID,
+            title: "Inbox",
+            source: .local,
+            suggestedIcon: "tray.full",
+            tintToken: "mint",
+            targetDurationMinutes: 30,
+            minimumDurationMinutes: 15,
+            scheduledDay: day,
+            preferredStartMinutes: 9 * 60 + 35,
+            preferredTimeWindow: .morning,
+            flexibility: .flexible,
+            calendarEventID: nil,
+            protectedCategory: nil,
+            notes: "",
+            isCompleted: false,
+            orderHint: 2,
+            isSavedForLater: false,
+            forceAfterBedtime: false
+        )
+
+        let plan = engine.plan(
+            for: day,
+            localItems: [restItem, followUpItem],
+            calendarEvents: [],
+            calendarLinks: [],
+            template: .default,
+            budget: .default,
+            context: InferenceContext(
+                now: day.adding(minutes: 9 * 60 + 45),
+                isSceneActive: true,
+                lastUserInteraction: day.adding(minutes: 9 * 60 + 44)
+            )
+        )
+
+        let restBlock = try #require(plan.allBlocks.first(where: { $0.itemID == restItemID }))
+        let followUpBlock = try #require(plan.allBlocks.first(where: { $0.itemID == followUpItemID }))
+
+        #expect(restBlock.isProtected == false)
+        #expect(restBlock.end > day.adding(minutes: 9 * 60 + 30))
+        #expect(followUpBlock.start >= restBlock.end)
+    }
+
     @MainActor
     @Test("Quick capture from Today creates a scheduled 30 minute item")
     func quickCaptureDefaults() throws {

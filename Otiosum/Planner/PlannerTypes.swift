@@ -196,7 +196,7 @@ struct EventSnapshot: Identifiable, Equatable, Sendable {
     let forceAfterBedtime: Bool
 
     var isProtected: Bool {
-        protectedCategory != nil || source == .template
+        source == .template
     }
 }
 
@@ -293,7 +293,7 @@ struct PlannedBlock: Identifiable, Equatable, Sendable {
     }
 
     var isProtected: Bool {
-        protectedCategory != nil || source == .template
+        source == .template
     }
 }
 

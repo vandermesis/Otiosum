@@ -44,6 +44,24 @@ struct InferenceEngineTests {
         #expect(assessment.confidence == 1)
     }
 
+    @Test("Local protected category blocks are assessed like editable work")
+    func localProtectedCategoryAssessment() {
+        let now = Date(timeIntervalSinceReferenceDate: 2_400)
+        let block = makeBlock(
+            start: now.addingTimeInterval(-300),
+            end: now.addingTimeInterval(600),
+            protectedCategory: .rest
+        )
+
+        let assessment = engine.assess(
+            block: block,
+            now: now,
+            context: InferenceContext(now: now, isSceneActive: false, lastUserInteraction: nil)
+        )
+
+        #expect(assessment.status == .likelyInProgress)
+    }
+
     @Test("Active block gets likely in progress with interaction confidence boost")
     func activeBlockAssessment() {
         let now = Date(timeIntervalSinceReferenceDate: 3_600)
