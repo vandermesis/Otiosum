@@ -41,6 +41,7 @@ final class PlannerShellViewModel {
 
     private let store: PlannerStore
     private let plannerViewModel: PlannerViewModel
+    @ObservationIgnored private var timelinePlansCache: TimelinePlansCache?
 
     init(
         store: PlannerStore,
@@ -128,18 +129,52 @@ final class PlannerShellViewModel {
         budget: DailyBudgetSnapshot,
         sceneIsActive: Bool
     ) -> [(Date, DayPlan)] {
-        plannerViewModel.makeTimelinePlans(
+        let calendar = Calendar.current
+        let selectedStart = calendar.startOfDay(for: selectedDay)
+        let days = (-3...3).compactMap { offset in
+            calendar.date(byAdding: .day, value: offset, to: selectedStart)
+        }
+        let calendarEventsByDay = days.map { day in
+            CalendarEventsForDay(day: day, events: calendarService.events(for: day))
+        }
+        let context = roundedInferenceContext(sceneIsActive: sceneIsActive)
+        let key = TimelinePlansCacheKey(
+            selectedDay: selectedStart,
+            items: items.map(\.snapshot),
+            calendarLinks: calendarLinks.map(\.snapshot),
+            template: template,
+            budget: budget,
+            context: context,
+            calendarEventsByDay: calendarEventsByDay
+        )
+
+        if let timelinePlansCache, timelinePlansCache.key == key {
+            return timelinePlansCache.plans
+        }
+
+        let plans = plannerViewModel.makeTimelinePlans(
             selectedDay: selectedDay,
             items: items,
             calendarLinks: calendarLinks,
             template: template,
             budget: budget,
             calendarEventsForDay: { day in
-                self.calendarService.events(for: day)
+                calendarEventsByDay.first { calendar.isDate($0.day, inSameDayAs: day) }?.events ?? []
             },
             contextForDay: { _ in
-                self.inferenceContext(sceneIsActive: sceneIsActive)
+                context
             }
+        )
+        timelinePlansCache = TimelinePlansCache(key: key, plans: plans)
+        return plans
+    }
+
+    private func roundedInferenceContext(sceneIsActive: Bool) -> InferenceContext {
+        let context = inferenceContext(sceneIsActive: sceneIsActive)
+        return InferenceContext(
+            now: context.now.roundedToNearestThirtySeconds,
+            isSceneActive: context.isSceneActive,
+            lastUserInteraction: context.lastUserInteraction
         )
     }
 
@@ -307,5 +342,33 @@ final class PlannerShellViewModel {
     func requestCalendarAccess() async {
         await calendarService.requestFullAccess()
         await refreshCalendar()
+    }
+}
+
+private struct TimelinePlansCache {
+    let key: TimelinePlansCacheKey
+    let plans: [(Date, DayPlan)]
+}
+
+private struct TimelinePlansCacheKey: Equatable {
+    let selectedDay: Date
+    let items: [EventSnapshot]
+    let calendarLinks: [CalendarLinkSnapshot]
+    let template: DayTemplateSnapshot
+    let budget: DailyBudgetSnapshot
+    let context: InferenceContext
+    let calendarEventsByDay: [CalendarEventsForDay]
+}
+
+private struct CalendarEventsForDay: Equatable {
+    let day: Date
+    let events: [CalendarEventSnapshot]
+}
+
+private extension Date {
+    var roundedToNearestThirtySeconds: Date {
+        let interval = timeIntervalSinceReferenceDate
+        let rounded = (interval / 30).rounded() * 30
+        return Date(timeIntervalSinceReferenceDate: rounded)
     }
 }

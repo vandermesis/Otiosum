@@ -411,7 +411,7 @@ private struct TimelineCanvasView: View {
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            VStack(spacing: 0) {
+            LazyVStack(spacing: 0) {
                 if showsHeader {
                     TimelineLegendView(now: now)
                         .padding(.horizontal, 12)
