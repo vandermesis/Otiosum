@@ -78,6 +78,7 @@ struct PlannerShellView: View {
                     TodayScreen(
                         day: selectedDayBinding,
                         plan: selectedDayPlan,
+                        timelineTitleDate: timelineCenterDate,
                         timelineBlocks: timelineBlocks,
                         budget: budgetSnapshot,
                         calendarService: viewModel.calendarService,
@@ -141,7 +142,6 @@ struct PlannerShellView: View {
                             timelineCenterDate = centerDate
                         }
                     )
-                    .toolbar(.hidden, for: .navigationBar)
                     .safeAreaInset(edge: .bottom) {
                         QuickCaptureToolbarContent(
                             text: todayQuickCaptureBinding,

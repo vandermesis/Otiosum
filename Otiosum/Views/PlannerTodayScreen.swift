@@ -4,6 +4,7 @@ struct TodayScreen: View {
     @Binding var day: Date
 
     let plan: DayPlan
+    let timelineTitleDate: Date
     let timelineBlocks: [PlannedBlock]
     let budget: DailyBudgetSnapshot
     let calendarService: SystemCalendarService
@@ -33,13 +34,6 @@ struct TodayScreen: View {
             .ignoresSafeArea(edges: .vertical)
 
             VStack(spacing: 10) {
-                TodayHeaderOverlay(
-                    day: day,
-                    plan: plan,
-                    onOpenLater: onOpenLater,
-                    onOpenSettings: onOpenSettings
-                )
-
                 if calendarService.canReadEvents == false {
                     PlannerMessageCard(
                         title: "Calendar is optional",
@@ -53,98 +47,29 @@ struct TodayScreen: View {
             .padding(.top, 6)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
-    }
-}
-
-private struct TodayHeaderOverlay: View {
-    let day: Date
-    let plan: DayPlan
-    let onOpenLater: () -> Void
-    let onOpenSettings: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .top, spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Today")
-                        .font(.system(.largeTitle, design: .rounded).bold())
-                    Text(day.formatted(.dateTime.weekday(.wide).day().month()))
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+        .navigationTitle(timelineTitleDate.formatted(.dateTime.weekday(.wide).day().month()))
+        .navigationSubtitle(navigationSubtitle(for: plan))
+        .toolbar {
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                Button("Settings", systemImage: "gearshape") {
+                    onOpenSettings()
                 }
+                .accessibilityIdentifier("today-open-settings")
 
-                Spacer()
-
-                HStack(spacing: 8) {
-                    Button("Settings", systemImage: "gearshape") {
-                        onOpenSettings()
-                    }
-                    .labelStyle(.iconOnly)
-                    .buttonStyle(.bordered)
-                    .controlSize(.large)
-                    .frame(width: 48, height: 48)
-                    .clipShape(.circle)
-                    .accessibilityIdentifier("today-open-settings")
-
-                    Button("Later", systemImage: "archivebox") {
-                        onOpenLater()
-                    }
-                    .labelStyle(.iconOnly)
-                    .buttonStyle(.bordered)
-                    .controlSize(.large)
-                    .frame(width: 48, height: 48)
-                    .clipShape(.circle)
-                    .accessibilityIdentifier("today-open-later")
+                Button("Later", systemImage: "archivebox") {
+                    onOpenLater()
                 }
+                .accessibilityIdentifier("today-open-later")
             }
-
-            TodayStatusCard(plan: plan)
         }
     }
-}
 
-private struct TodayStatusCard: View {
-    let plan: DayPlan
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(plan.nowBlock == nil ? "Open right now" : "Now")
-                    .font(.caption.bold())
-                    .foregroundStyle(.secondary)
-                    .textCase(.uppercase)
-                Text(plan.nowBlock?.title ?? "There is room to start gently.")
-                    .font(.headline)
-                if let nowBlock = plan.nowBlock {
-                    Text(timeRange(for: nowBlock))
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            Spacer()
-
-            VStack(alignment: .trailing, spacing: 6) {
-                Text(plan.nextBlock == nil ? "Later" : "Next")
-                    .font(.caption.bold())
-                    .foregroundStyle(.secondary)
-                    .textCase(.uppercase)
-                Text(plan.nextBlock?.title ?? "Nothing urgent is queued.")
-                    .font(.subheadline)
-                    .multilineTextAlignment(.trailing)
-                if plan.warnings.isEmpty == false {
-                    Text("\(plan.warnings.count) gentle check\(plan.warnings.count == 1 ? "" : "s")")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
-            }
+    private func navigationSubtitle(for plan: DayPlan) -> String {
+        guard let nowBlock = plan.nowBlock else {
+            return "Open right now: There is room to start gently."
         }
-        .padding(14)
-        .background(.regularMaterial, in: .rect(cornerRadius: 24))
-        .overlay {
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .strokeBorder(.white.opacity(0.48), lineWidth: 1)
-        }
+
+        return "Now: \(nowBlock.title), \(timeRange(for: nowBlock))"
     }
 
     private func timeRange(for block: PlannedBlock) -> String {
