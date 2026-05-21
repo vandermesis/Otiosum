@@ -330,6 +330,69 @@ struct PlannerEngineTests {
         #expect(plan.warnings.contains(where: { $0.message == "Not enough room today." }))
     }
 
+    @Test("Current-time push that reaches sleep reports the task to move")
+    func currentTimePushIntoSleepReportsTaskToMove() throws {
+        let day = try makeDate(year: 2026, month: 4, day: 20, hour: 0, minute: 0)
+        let lateItemID = UUID()
+        let lateItem = EventSnapshot(
+            id: lateItemID,
+            title: "Late task",
+            source: .local,
+            suggestedIcon: "moon.stars",
+            tintToken: "indigo",
+            targetDurationMinutes: 30,
+            minimumDurationMinutes: 30,
+            scheduledDay: day,
+            preferredStartMinutes: 22 * 60,
+            preferredTimeWindow: .night,
+            flexibility: .flexible,
+            calendarEventID: nil,
+            protectedCategory: nil,
+            notes: "",
+            isCompleted: false,
+            orderHint: 1,
+            isSavedForLater: false,
+            forceAfterBedtime: false
+        )
+        let template = DayTemplateSnapshot(
+            wakeUpMinutes: 0,
+            sleepStartMinutes: 23 * 60,
+            breakfastMinutes: 8 * 60,
+            lunchMinutes: 13 * 60,
+            dinnerMinutes: 19 * 60,
+            quietStartMinutes: 20 * 60,
+            quietDurationMinutes: 0,
+            workoutMinutes: 17 * 60,
+            workoutDurationMinutes: 0,
+            includeWorkout: false,
+            transitionBufferMinutes: 0
+        )
+        let budget = DailyBudgetSnapshot(
+            minimumSleepHours: 8,
+            minimumRestMinutes: 0,
+            targetWorkMinutes: 6 * 60,
+            maxFocusItems: 5,
+            mealDurationMinutes: 0,
+            workoutTargetMinutes: 0,
+            quickAddDefaultDurationMinutes: 30,
+            lowNotificationMode: true,
+            useSimplifiedMode: false
+        )
+
+        let plan = engine.plan(
+            for: day,
+            localItems: [lateItem],
+            calendarEvents: [],
+            calendarLinks: [],
+            template: template,
+            budget: budget,
+            context: InferenceContext(now: day.adding(minutes: 22 * 60 + 45), isSceneActive: true, lastUserInteraction: nil)
+        )
+
+        #expect(plan.tooMuchTodayIssues.first?.itemID == lateItemID)
+        #expect(plan.tooMuchTodayIssues.first?.title == "Late task")
+    }
+
     @Test("Recurring meal blocks behave like timeline tasks when flexible work overlaps them")
     func recurringMealBlocksBehaveLikeTimelineTasks() throws {
         let day = try makeDate(year: 2026, month: 4, day: 21, hour: 0, minute: 0)

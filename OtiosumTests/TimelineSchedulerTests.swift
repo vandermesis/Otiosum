@@ -71,7 +71,8 @@ struct TimelineSchedulerTests {
     @Test("Pushing sleep creates a sleep collision decision")
     func pushingSleepCreatesSleepCollisionDecision() throws {
         let day = try makeDate(year: 2026, month: 5, day: 21)
-        let launch = block(title: "Launch", start: day.adding(minutes: 22 * 60), duration: 90)
+        let launchID = UUID()
+        let launch = block(id: launchID, title: "Launch", start: day.adding(minutes: 22 * 60), duration: 90)
         let sleep = block(title: "Sleep", start: day.adding(minutes: 23 * 60), duration: 60, protectedCategory: .sleep)
         let now = day.adding(minutes: 22 * 60 + 45)
 
@@ -86,6 +87,8 @@ struct TimelineSchedulerTests {
         let scheduledSleep = try #require(result.blocks.first { $0.title == "Sleep" })
         #expect(scheduledSleep.start >= scheduledLaunch.end)
         #expect(result.sleepCollisionIssues.count == 1)
+        #expect(result.sleepCollisionIssues.first?.itemID == launchID)
+        #expect(result.sleepCollisionIssues.first?.title == "Launch")
         assertNoOverlap(result.blocks)
     }
 
@@ -123,7 +126,25 @@ struct TimelineSchedulerTests {
         #expect(result.conflictingBlock == nil)
     }
 
+    @Test("Dropping unscheduled task into occupied space is rejected")
+    func dropIntoOccupiedSpaceIsRejected() throws {
+        let day = try makeDate(year: 2026, month: 5, day: 21)
+        let itemID = UUID()
+        let workout = block(title: "Workout", start: day.adding(minutes: 11 * 60), duration: 45)
+        let proposedStart = day.adding(minutes: 11 * 60 + 15)
+
+        let conflict = scheduler.conflict(
+            for: itemID,
+            proposedStart: proposedStart,
+            durationMinutes: 30,
+            among: [workout]
+        )
+
+        #expect(conflict?.title == "Workout")
+    }
+
     private func block(
+        id: UUID = UUID(),
         title: String,
         start: Date,
         duration: Int,
@@ -133,8 +154,8 @@ struct TimelineSchedulerTests {
         isStarted: Bool = false
     ) -> PlannedBlock {
         PlannedBlock(
-            id: UUID(),
-            itemID: UUID(),
+            id: id,
+            itemID: id,
             calendarEventID: nil,
             title: title,
             start: start,

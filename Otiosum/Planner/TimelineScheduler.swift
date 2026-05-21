@@ -41,17 +41,23 @@ struct TimelineScheduler {
         let roundedNow = roundUp(now)
         var sleepCollisionIssues: [TooMuchTodayIssue] = []
         var runningEnd = roundedNow
+        var sleepPressureSource: PlannedBlock?
 
         for block in sortedBlocks.dropFirst(pushIndex) {
             let duration = block.end.timeIntervalSince(block.start)
             let proposedStart = max(block.start, runningEnd)
             let proposedEnd = proposedStart.addingTimeInterval(duration)
 
+            if isSleep(block) == false && block.source == .local && proposedStart != block.start {
+                sleepPressureSource = block
+            }
+
             if isSleep(block), proposedStart != block.start {
+                let source = sleepPressureSource ?? block
                 sleepCollisionIssues.append(
                     TooMuchTodayIssue(
-                        itemID: block.itemID,
-                        title: block.title,
+                        itemID: source.itemID,
+                        title: source.title,
                         message: "This plan is starting to push sleep.",
                         displacedCategory: .sleep,
                         suggestedDate: calendar.date(byAdding: .day, value: 1, to: dayStart) ?? dayStart
@@ -79,12 +85,12 @@ struct TimelineScheduler {
         to proposedStart: Date,
         among blocks: [PlannedBlock]
     ) -> TimelineMoveResult {
-        let proposedEnd = proposedStart.addingTimeInterval(movingBlock.end.timeIntervalSince(movingBlock.start))
-        let conflict = blocks.first { block in
-            guard block.id != movingBlock.id else { return false }
-            guard block.isAllDay == false else { return false }
-            return proposedStart < block.end && proposedEnd > block.start
-        }
+        let conflict = conflict(
+            for: movingBlock.itemID,
+            proposedStart: proposedStart,
+            durationMinutes: movingBlock.durationMinutes,
+            among: blocks
+        )
 
         return TimelineMoveResult(
             block: movingBlock,
@@ -92,6 +98,20 @@ struct TimelineScheduler {
             canMove: conflict == nil,
             conflictingBlock: conflict
         )
+    }
+
+    func conflict(
+        for itemID: UUID,
+        proposedStart: Date,
+        durationMinutes: Int,
+        among blocks: [PlannedBlock]
+    ) -> PlannedBlock? {
+        let proposedEnd = proposedStart.adding(minutes: durationMinutes)
+        return blocks.first { block in
+            guard block.itemID != itemID else { return false }
+            guard block.isAllDay == false else { return false }
+            return proposedStart < block.end && proposedEnd > block.start
+        }
     }
 
     private func compacted(

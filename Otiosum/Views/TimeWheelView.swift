@@ -129,6 +129,7 @@ struct TimeWheelView: View {
                     TimelineCenterNowLine(
                         date: scrollAnchorDate ?? now
                     )
+                    .allowsHitTesting(false)
                 }
                 .overlay(alignment: .trailing) {
                     if shouldShowBackToNow(for: now) {

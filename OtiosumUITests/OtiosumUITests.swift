@@ -81,9 +81,14 @@ final class OtiosumUITests: XCTestCase {
             }
         }
         XCTAssertTrue(startButton.waitForExistence(timeout: 2))
-        startButton.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
 
         let markDoneButton = app.buttons["timeline-task-done-\(taskIdentifier)"]
+        if markDoneButton.waitForExistence(timeout: 1) == false {
+            startButton.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        }
+        if markDoneButton.waitForExistence(timeout: 1) == false && startButton.exists {
+            startButton.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        }
         XCTAssertTrue(markDoneButton.waitForExistence(timeout: 5))
         markDoneButton.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
     }

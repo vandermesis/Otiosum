@@ -101,6 +101,14 @@ struct PlannerShellView: View {
                         },                        
                         onDropLaterItem: { itemID, date in
                             guard let event = eventLookup[itemID] else { return false }
+                            let duration = max(event.targetDurationMinutes, event.minimumDurationMinutes)
+                            let conflict = TimelineScheduler().conflict(
+                                for: event.id,
+                                proposedStart: date,
+                                durationMinutes: duration,
+                                among: timelineBlocks
+                            )
+                            guard conflict == nil else { return false }
                             viewModel.scheduleLaterEvent(event, at: date, modelContext: modelContext)
                             return true
                         },
