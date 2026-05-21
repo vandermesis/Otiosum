@@ -145,6 +145,11 @@ enum AppConfiguration {
 
         let today = Calendar.current.startOfDay(for: .now)
 
+        if hasDeterministicTimelineTask {
+            try seedDeterministicTimelineTask(in: context, template: template, today: today)
+            return
+        }
+
         let focusIcon = IconSuggester.suggest(for: "Write proposal")
         let relaxIcon = IconSuggester.suggest(for: "Relax")
         let callIcon = IconSuggester.suggest(for: "Call therapist")
@@ -214,28 +219,47 @@ enum AppConfiguration {
             )
         )
 
-        if hasDeterministicTimelineTask {
-            let now = Date.now
-            let currentMinutes = now.minutesSinceStartOfDay(using: .current)
-            let roundedMinutes = ((currentMinutes + 2) / 5) * 5
-            let timelineIcon = IconSuggester.suggest(for: "UI timeline task")
+        try context.save()
+    }
 
-            context.insert(
-                Event(
-                    title: "UI Timeline Task",
-                    source: .local,
-                    suggestedIcon: timelineIcon.symbolName,
-                    tintToken: timelineIcon.tintToken,
-                    targetDurationMinutes: 30,
-                    minimumDurationMinutes: 15,
-                    scheduledDay: today,
-                    preferredStartMinutes: roundedMinutes,
-                    preferredTimeWindow: .anytime,
-                    flexibility: .flexible,
-                    isSavedForLater: false
-                )
-            )
+    @MainActor
+    private static func seedDeterministicTimelineTask(
+        in context: ModelContext,
+        template: DayTemplate,
+        today: Date
+    ) throws {
+        template.wakeUpMinutes = 0
+        template.sleepStartMinutes = 24 * 60
+        template.quietDurationMinutes = 0
+        template.includeWorkout = false
+        template.transitionBufferMinutes = 0
+
+        if let budget = try context.fetch(FetchDescriptor<DailyBudget>()).first {
+            budget.mealDurationMinutes = 0
         }
+
+        let now = Date.now
+        let currentMinutes = now.minutesSinceStartOfDay(using: .current)
+        let startMinutes = min(max(currentMinutes - 5, 0), (24 * 60) - 30)
+        let timelineIcon = IconSuggester.suggest(for: "UI timeline task")
+
+        context.insert(
+            Event(
+                title: "UI Timeline Task",
+                source: .local,
+                suggestedIcon: timelineIcon.symbolName,
+                tintToken: timelineIcon.tintToken,
+                targetDurationMinutes: 30,
+                minimumDurationMinutes: 15,
+                scheduledDay: today,
+                preferredStartMinutes: startMinutes,
+                preferredTimeWindow: .anytime,
+                flexibility: .flexible,
+                orderHint: -1,
+                isSavedForLater: false,
+                forceAfterBedtime: true
+            )
+        )
 
         try context.save()
     }

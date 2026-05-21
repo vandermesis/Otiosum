@@ -72,7 +72,7 @@ final class OtiosumUITests: XCTestCase {
         let app = launchApp(extraArguments: ["UITEST_TIMELINE_TASK"])
 
         let taskIdentifier = "ui-timeline-task"
-        let markDoneButton = app.descendants(matching: .any)["timeline-task-done-\(taskIdentifier)"]
+        let markDoneButton = app.buttons["timeline-task-done-\(taskIdentifier)"]
         if markDoneButton.waitForExistence(timeout: 4) == false {
             let timeline = app.scrollViews.firstMatch
             if timeline.waitForExistence(timeout: 2) {
@@ -80,7 +80,7 @@ final class OtiosumUITests: XCTestCase {
                 timeline.swipeDown()
             }
         }
-        try XCTSkipIf(markDoneButton.exists == false, "Timeline quick action control was not exposed in this UI hierarchy run.")
+        XCTAssertTrue(markDoneButton.waitForExistence(timeout: 2))
         markDoneButton.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
     }
 
