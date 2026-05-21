@@ -93,18 +93,15 @@ struct PlannerEngine {
             }
         }
 
-        let adjusted = applyOverrunIfNeeded(
-            to: allBlocks,
-            itemLookup: Dictionary(uniqueKeysWithValues: localItems.map { ($0.id, $0) }),
-            context: context,
+        let scheduled = TimelineScheduler(calendar: calendar).schedule(
+            blocks: allBlocks,
+            now: context.now,
             day: day,
-            template: template,
-            sleepBoundary: sleepBoundary,
-            endOfDay: endOfDay
+            transitionBufferMinutes: template.transitionBufferMinutes
         )
 
-        let finalBlocks = decorateStatuses(adjusted.blocks + allDayCalendarBlocks, context: context)
-        tooMuchTodayIssues.append(contentsOf: adjusted.tooMuchTodayIssues)
+        let finalBlocks = decorateStatuses(scheduled.blocks + allDayCalendarBlocks, context: context)
+        tooMuchTodayIssues.append(contentsOf: scheduled.sleepCollisionIssues)
 
         let budgetSummary = makeBudgetSummary(
             blocks: finalBlocks,
@@ -114,7 +111,7 @@ struct PlannerEngine {
         let warnings = makeWarnings(
             blocks: finalBlocks,
             tooMuchTodayIssues: tooMuchTodayIssues,
-            shiftProposals: adjusted.shiftProposals,
+            shiftProposals: [],
             budgetSummary: budgetSummary,
             budget: budget,
             template: template,
@@ -126,11 +123,10 @@ struct PlannerEngine {
             .sorted(by: blockSort)
 
         let nowBlock = incompleteBlocks.last(where: { context.now >= $0.start && context.now < $0.end })
-        let nextBlock = incompleteBlocks.first(where: { $0.start > context.now && $0.isProtected == false })
+        let nextBlock = incompleteBlocks.first(where: { $0.start > context.now })
         let laterBlocks = incompleteBlocks.filter { block in
-            block.isProtected == false && block.id != nowBlock?.id && block.id != nextBlock?.id && block.start >= context.now
+            block.id != nowBlock?.id && block.id != nextBlock?.id && block.start >= context.now
         }
-        let protectedUpcoming = incompleteBlocks.filter { $0.isProtected && $0.start >= context.now }
 
         return DayPlan(
             day: day,
@@ -138,10 +134,10 @@ struct PlannerEngine {
             nowBlock: nowBlock,
             nextBlock: nextBlock,
             laterBlocks: laterBlocks,
-            protectedBlocks: protectedUpcoming,
+            protectedBlocks: [],
             warnings: warnings,
             tooMuchTodayIssues: deduplicated(tooMuchTodayIssues),
-            shiftProposals: deduplicated(adjusted.shiftProposals),
+            shiftProposals: [],
             budgetSummary: budgetSummary
         )
     }
@@ -160,7 +156,7 @@ struct PlannerEngine {
             template.wakeUpMinutes
         )
         let duration = max(item.targetDurationMinutes, item.minimumDurationMinutes)
-        let limit = item.forceAfterBedtime ? endOfDay : sleepBoundary
+        let limit = endOfDay
         var candidateStart = calendar.date(on: day, minutesFromStartOfDay: startMinutes)
 
         while candidateStart < endOfDay {
@@ -199,6 +195,7 @@ struct PlannerEngine {
                 isAllDay: false,
                 protectedCategory: item.protectedCategory,
                 isCompleted: item.isCompleted,
+                isStarted: item.isStarted,
                 status: item.isCompleted ? .complete : .upcoming,
                 confidence: item.isCompleted ? 1 : 0.7
             )
@@ -241,133 +238,9 @@ struct PlannerEngine {
             isAllDay: false,
             protectedCategory: item.protectedCategory,
             isCompleted: item.isCompleted,
+            isStarted: item.isStarted,
             status: item.isCompleted ? .complete : .upcoming,
             confidence: item.isCompleted ? 1 : 0.7
-        )
-    }
-
-    private func applyOverrunIfNeeded(
-        to blocks: [PlannedBlock],
-        itemLookup: [UUID: EventSnapshot],
-        context: InferenceContext,
-        day: Date,
-        template: DayTemplateSnapshot,
-        sleepBoundary: Date,
-        endOfDay: Date
-    ) -> OverrunResult {
-        let sortedBlocks = blocks.sorted(by: blockSort)
-        guard
-            let activeIndex = sortedBlocks.firstIndex(where: { block in
-                block.source == .local
-                    && block.isCompleted == false
-                    && block.isProtected == false
-                    && block.start <= context.now
-            })
-        else {
-            return OverrunResult(blocks: sortedBlocks, tooMuchTodayIssues: [], shiftProposals: [], warnings: [])
-        }
-
-        let activeBlock = sortedBlocks[activeIndex]
-        guard var extendedEnd = inferenceEngine.overrunEnd(
-            for: activeBlock,
-            now: context.now,
-            context: context,
-            transitionBufferMinutes: template.transitionBufferMinutes
-        ) else {
-            return OverrunResult(blocks: sortedBlocks, tooMuchTodayIssues: [], shiftProposals: [], warnings: [])
-        }
-
-        var warnings: [GuardrailWarning] = []
-        if let immovableConflict = sortedBlocks.dropFirst(activeIndex + 1).first(where: { block in
-            block.start < extendedEnd && (block.isProtected || block.flexibility == .locked)
-        }) {
-            extendedEnd = immovableConflict.start
-            warnings.append(
-                GuardrailWarning(
-                    message: "A fixed block is coming up soon.",
-                    detail: "Otiosum kept \(immovableConflict.title) in place so you do not need to rush more than necessary.",
-                    severity: .calm
-                )
-            )
-        }
-
-        guard extendedEnd > activeBlock.end else {
-            return OverrunResult(blocks: sortedBlocks, tooMuchTodayIssues: [], shiftProposals: [], warnings: warnings)
-        }
-
-        var result = Array(sortedBlocks.prefix(activeIndex))
-        let extendedActive = shifted(block: activeBlock, start: activeBlock.start, end: extendedEnd)
-        result.append(extendedActive)
-
-        var tooMuchTodayIssues: [TooMuchTodayIssue] = []
-        var shiftProposals: [CalendarShiftProposal] = []
-        var runningEnd = extendedActive.end
-
-        for block in sortedBlocks.dropFirst(activeIndex + 1) {
-            if block.start >= runningEnd {
-                result.append(block)
-                runningEnd = block.end
-                continue
-            }
-
-            let proposedStart = runningEnd
-            let proposedEnd = proposedStart.addingTimeInterval(block.end.timeIntervalSince(block.start))
-
-            if block.source == .calendar {
-                if block.flexibility == .askBeforeMove {
-                    shiftProposals.append(
-                        CalendarShiftProposal(
-                            calendarEventID: block.calendarEventID ?? "",
-                            title: block.title,
-                            currentStart: block.start,
-                            currentEnd: block.end,
-                            suggestedStart: proposedStart,
-                            suggestedEnd: proposedEnd
-                        )
-                    )
-                }
-
-                if block.flexibility == .locked {
-                    result.append(block)
-                    runningEnd = block.end
-                    continue
-                }
-
-                result.append(shifted(block: block, start: proposedStart, end: proposedEnd))
-                runningEnd = proposedEnd
-                continue
-            }
-
-            if block.isProtected {
-                result.append(block)
-                runningEnd = block.end
-                continue
-            }
-
-            let forceAfterBedtime = itemLookup[block.itemID]?.forceAfterBedtime ?? false
-            if proposedEnd > sleepBoundary && forceAfterBedtime == false {
-                tooMuchTodayIssues.append(
-                    TooMuchTodayIssue(
-                        itemID: block.itemID,
-                        title: block.title,
-                        message: "Not enough room today. This would cut into sleep or recovery.",
-                        displacedCategory: .sleep,
-                        suggestedDate: calendar.date(byAdding: .day, value: 1, to: day) ?? day
-                    )
-                )
-                continue
-            }
-
-            let clampedEnd = min(proposedEnd, endOfDay)
-            result.append(shifted(block: block, start: proposedStart, end: clampedEnd))
-            runningEnd = clampedEnd.adding(minutes: template.transitionBufferMinutes)
-        }
-
-        return OverrunResult(
-            blocks: result.sorted(by: blockSort),
-            tooMuchTodayIssues: tooMuchTodayIssues,
-            shiftProposals: shiftProposals.filter { $0.calendarEventID.isEmpty == false },
-            warnings: warnings
         )
     }
 
@@ -377,6 +250,7 @@ struct PlannerEngine {
     ) -> [PlannedBlock] {
         blocks.map { block in
             let assessment = inferenceEngine.assess(block: block, now: context.now, context: context)
+            let resolvedCompletion = block.isCompleted || (block.isStarted && context.now >= block.end)
             return PlannedBlock(
                 id: block.id,
                 itemID: block.itemID,
@@ -391,7 +265,8 @@ struct PlannerEngine {
                 notes: block.notes,
                 isAllDay: block.isAllDay,
                 protectedCategory: block.protectedCategory,
-                isCompleted: block.isCompleted,
+                isCompleted: resolvedCompletion,
+                isStarted: resolvedCompletion ? false : block.isStarted,
                 status: assessment.status,
                 confidence: assessment.confidence
             )
@@ -493,15 +368,16 @@ struct PlannerEngine {
             start: start,
             end: endDate,
             source: .template,
-            flexibility: .locked,
+            flexibility: .flexible,
             symbolName: symbol,
             tintToken: tintToken,
             notes: "",
             isAllDay: false,
             protectedCategory: category,
             isCompleted: false,
-            status: .protectedTime,
-            confidence: 1
+            isStarted: false,
+            status: .upcoming,
+            confidence: 0.7
         )
     }
 
@@ -535,6 +411,7 @@ struct PlannerEngine {
                 isAllDay: event.isAllDay,
                 protectedCategory: nil,
                 isCompleted: false,
+                isStarted: false,
                 status: .upcoming,
                 confidence: 0.7
             )
@@ -547,13 +424,13 @@ struct PlannerEngine {
         budget: DailyBudgetSnapshot
     ) -> BudgetUsageSummary {
         let workMinutes = blocks
-            .filter { $0.isProtected == false }
+            .filter { $0.isAllDay == false && $0.isCompleted == false }
             .reduce(0) { $0 + $1.durationMinutes }
         let restMinutes = blocks
             .filter { $0.protectedCategory == .rest }
             .reduce(0) { $0 + $1.durationMinutes }
         let sleepMinutesProtected = Int(budget.minimumSleepHours * 60)
-        let scheduledCount = blocks.filter { $0.isProtected == false }.count
+        let scheduledCount = blocks.filter { $0.isAllDay == false && $0.isCompleted == false }.count
 
         return BudgetUsageSummary(
             workMinutes: workMinutes,
@@ -666,6 +543,7 @@ struct PlannerEngine {
             isAllDay: block.isAllDay,
             protectedCategory: block.protectedCategory,
             isCompleted: block.isCompleted,
+            isStarted: block.isStarted,
             status: block.status,
             confidence: block.confidence
         )
@@ -707,11 +585,4 @@ struct PlannerEngine {
 private enum PlacementResult {
     case scheduled(PlannedBlock)
     case tooMuchToday(TooMuchTodayIssue)
-}
-
-private struct OverrunResult {
-    var blocks: [PlannedBlock]
-    var tooMuchTodayIssues: [TooMuchTodayIssue]
-    var shiftProposals: [CalendarShiftProposal]
-    var warnings: [GuardrailWarning]
 }

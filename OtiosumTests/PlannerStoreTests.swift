@@ -460,6 +460,44 @@ struct PlannerStoreTests {
         #expect(store.pendingCalendarShift?.proposal.calendarEventID == "A")
     }
 
+    @Test("Started events are completed when their scheduled end passes")
+    func completeFinishedStartedEvents() throws {
+        let modelContext = try makeModelContext()
+        let store = PlannerStore()
+        let now = Date(timeIntervalSinceReferenceDate: 200_000)
+        let finished = Event(
+            title: "Finished",
+            suggestedIcon: "checkmark",
+            tintToken: "mint",
+            targetDurationMinutes: 30,
+            scheduledDay: Calendar.current.startOfDay(for: now),
+            preferredStartMinutes: now.adding(minutes: -45).minutesSinceStartOfDay(using: .current),
+            isCompleted: false,
+            isStarted: true
+        )
+        let active = Event(
+            title: "Active",
+            suggestedIcon: "play",
+            tintToken: "teal",
+            targetDurationMinutes: 30,
+            scheduledDay: Calendar.current.startOfDay(for: now),
+            preferredStartMinutes: now.adding(minutes: -10).minutesSinceStartOfDay(using: .current),
+            isCompleted: false,
+            isStarted: true
+        )
+
+        modelContext.insert(finished)
+        modelContext.insert(active)
+        try modelContext.save()
+
+        store.completeFinishedStartedEvents(now: now, modelContext: modelContext)
+
+        #expect(finished.isCompleted)
+        #expect(finished.isStarted == false)
+        #expect(active.isCompleted == false)
+        #expect(active.isStarted)
+    }
+
     private func makeModelContext() throws -> ModelContext {
         let schema = Schema([
             Item.self,

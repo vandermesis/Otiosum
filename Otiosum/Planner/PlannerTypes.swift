@@ -191,12 +191,55 @@ struct EventSnapshot: Identifiable, Equatable, Sendable {
     let protectedCategory: ProtectedCategory?
     let notes: String
     let isCompleted: Bool
+    let isStarted: Bool
     let orderHint: Double
     let isSavedForLater: Bool
     let forceAfterBedtime: Bool
 
+    init(
+        id: UUID,
+        title: String,
+        source: PlannerItemSource,
+        suggestedIcon: String,
+        tintToken: String,
+        targetDurationMinutes: Int,
+        minimumDurationMinutes: Int,
+        scheduledDay: Date?,
+        preferredStartMinutes: Int?,
+        preferredTimeWindow: PreferredTimeWindow,
+        flexibility: PlannerFlexibility,
+        calendarEventID: String?,
+        protectedCategory: ProtectedCategory?,
+        notes: String,
+        isCompleted: Bool,
+        isStarted: Bool = false,
+        orderHint: Double,
+        isSavedForLater: Bool,
+        forceAfterBedtime: Bool
+    ) {
+        self.id = id
+        self.title = title
+        self.source = source
+        self.suggestedIcon = suggestedIcon
+        self.tintToken = tintToken
+        self.targetDurationMinutes = targetDurationMinutes
+        self.minimumDurationMinutes = minimumDurationMinutes
+        self.scheduledDay = scheduledDay
+        self.preferredStartMinutes = preferredStartMinutes
+        self.preferredTimeWindow = preferredTimeWindow
+        self.flexibility = flexibility
+        self.calendarEventID = calendarEventID
+        self.protectedCategory = protectedCategory
+        self.notes = notes
+        self.isCompleted = isCompleted
+        self.isStarted = isStarted
+        self.orderHint = orderHint
+        self.isSavedForLater = isSavedForLater
+        self.forceAfterBedtime = forceAfterBedtime
+    }
+
     var isProtected: Bool {
-        source == .template
+        false
     }
 }
 
@@ -285,15 +328,54 @@ struct PlannedBlock: Identifiable, Equatable, Sendable {
     let isAllDay: Bool
     let protectedCategory: ProtectedCategory?
     let isCompleted: Bool
+    let isStarted: Bool
     let status: InferredProgressStatus
     let confidence: Double
+
+    init(
+        id: UUID,
+        itemID: UUID,
+        calendarEventID: String?,
+        title: String,
+        start: Date,
+        end: Date,
+        source: PlannerItemSource,
+        flexibility: PlannerFlexibility,
+        symbolName: String,
+        tintToken: String,
+        notes: String,
+        isAllDay: Bool,
+        protectedCategory: ProtectedCategory?,
+        isCompleted: Bool,
+        isStarted: Bool = false,
+        status: InferredProgressStatus,
+        confidence: Double
+    ) {
+        self.id = id
+        self.itemID = itemID
+        self.calendarEventID = calendarEventID
+        self.title = title
+        self.start = start
+        self.end = end
+        self.source = source
+        self.flexibility = flexibility
+        self.symbolName = symbolName
+        self.tintToken = tintToken
+        self.notes = notes
+        self.isAllDay = isAllDay
+        self.protectedCategory = protectedCategory
+        self.isCompleted = isCompleted
+        self.isStarted = isStarted
+        self.status = status
+        self.confidence = confidence
+    }
 
     var durationMinutes: Int {
         Int(end.timeIntervalSince(start) / 60)
     }
 
     var isProtected: Bool {
-        source == .template
+        false
     }
 }
 

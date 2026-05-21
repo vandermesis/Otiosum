@@ -14,6 +14,7 @@ struct PlannerShellView: View {
     @State private var isLaterSheetPresented = false
     @State private var isSettingsPresented = false
     @State private var timelineCenterDate = Date.now
+    @State private var completionRefreshToken = 0
     @FocusState private var isQuickCaptureFocused: Bool
 
     private var template: DayTemplate? { templates.first }
@@ -27,7 +28,8 @@ struct PlannerShellView: View {
             calendarLinks: calendarLinks,
             template: templateSnapshot,
             budget: budgetSnapshot,
-            sceneIsActive: scenePhase == .active
+            sceneIsActive: scenePhase == .active,
+            timelineCenterDate: timelineCenterDate
         )
     }
 
@@ -64,6 +66,10 @@ struct PlannerShellView: View {
 
     private var todayQuickCaptureSuggestion: IconSuggestion? {
         viewModel.todayQuickCaptureSuggestion
+    }
+
+    private var timelineCenterDay: Date {
+        Calendar.current.startOfDay(for: timelineCenterDate)
     }
 
     var body: some View {
@@ -173,10 +179,23 @@ struct PlannerShellView: View {
         }
         .task {
             try? viewModel.ensureSeedData(in: modelContext)
+            viewModel.completeFinishedStartedEvents(modelContext: modelContext)
             await viewModel.refreshCalendar()
+        }
+        .task(id: completionRefreshToken) {
+            viewModel.completeFinishedStartedEvents(modelContext: modelContext)
+        }
+        .task {
+            while Task.isCancelled == false {
+                try? await Task.sleep(for: .seconds(30))
+                completionRefreshToken += 1
+            }
         }
         .task(id: viewModel.selectedDay) {
             await viewModel.refreshCalendar()
+        }
+        .task(id: timelineCenterDay) {
+            await viewModel.refreshCalendar(around: timelineCenterDate)
         }
         .task(id: promptKey) {
             viewModel.refreshPrompts(for: selectedDayPlan, modelContext: modelContext)

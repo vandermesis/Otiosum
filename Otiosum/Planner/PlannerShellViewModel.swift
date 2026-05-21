@@ -62,6 +62,10 @@ final class PlannerShellViewModel {
         store.registerInteraction()
     }
 
+    func completeFinishedStartedEvents(modelContext: ModelContext) {
+        store.completeFinishedStartedEvents(modelContext: modelContext)
+    }
+
     func ensureSeedData(in modelContext: ModelContext) throws {
         try store.ensureSeedData(in: modelContext)
     }
@@ -127,19 +131,20 @@ final class PlannerShellViewModel {
         calendarLinks: [CalendarLink],
         template: DayTemplateSnapshot,
         budget: DailyBudgetSnapshot,
-        sceneIsActive: Bool
+        sceneIsActive: Bool,
+        timelineCenterDate: Date
     ) -> [(Date, DayPlan)] {
         let calendar = Calendar.current
-        let selectedStart = calendar.startOfDay(for: selectedDay)
+        let centerStart = calendar.startOfDay(for: timelineCenterDate)
         let days = (-3...3).compactMap { offset in
-            calendar.date(byAdding: .day, value: offset, to: selectedStart)
+            calendar.date(byAdding: .day, value: offset, to: centerStart)
         }
         let calendarEventsByDay = days.map { day in
             CalendarEventsForDay(day: day, events: calendarService.events(for: day))
         }
         let context = roundedInferenceContext(sceneIsActive: sceneIsActive)
         let key = TimelinePlansCacheKey(
-            selectedDay: selectedStart,
+            timelineCenterDay: centerStart,
             items: items.map(\.snapshot),
             calendarLinks: calendarLinks.map(\.snapshot),
             template: template,
@@ -153,7 +158,7 @@ final class PlannerShellViewModel {
         }
 
         let plans = plannerViewModel.makeTimelinePlans(
-            selectedDay: selectedDay,
+            selectedDay: centerStart,
             items: items,
             calendarLinks: calendarLinks,
             template: template,
@@ -257,9 +262,11 @@ final class PlannerShellViewModel {
         modelContext: ModelContext
     ) {
         registerInteraction()
-        guard block.source == .local, block.isProtected == false else { return }
-        guard let event = itemLookup[block.itemID] else { return }
-        store.rescheduleEvent(event, to: start, modelContext: modelContext)
+        if block.source == .template {
+            store.scheduleTemplateBlock(block, to: start, modelContext: modelContext)
+        } else if block.source == .local, let event = itemLookup[block.itemID] {
+            store.rescheduleEvent(event, to: start, modelContext: modelContext)
+        }
     }
 
     func adjustDuration(
@@ -269,7 +276,7 @@ final class PlannerShellViewModel {
         modelContext: ModelContext
     ) {
         registerInteraction()
-        guard block.source == .local, block.isProtected == false else { return }
+        guard block.source == .local else { return }
         guard let event = itemLookup[block.itemID] else { return }
         store.adjustDuration(for: event, by: deltaMinutes, modelContext: modelContext)
     }
@@ -282,7 +289,7 @@ final class PlannerShellViewModel {
         registerInteraction()
         if block.source == .template {
             store.startProtectedBlockNow(block, modelContext: modelContext)
-        } else if block.source == .local, block.isProtected == false, let event = itemLookup[block.itemID] {
+        } else if block.source == .local, let event = itemLookup[block.itemID] {
             store.startEventNow(event, modelContext: modelContext)
         }
     }
@@ -341,6 +348,10 @@ final class PlannerShellViewModel {
         await calendarService.refreshEvents(covering: store.calendarRefreshInterval(around: selectedDay))
     }
 
+    func refreshCalendar(around day: Date) async {
+        await calendarService.refreshEvents(covering: store.calendarRefreshInterval(around: day))
+    }
+
     func requestCalendarAccess() async {
         await calendarService.requestFullAccess()
         await refreshCalendar()
@@ -353,7 +364,7 @@ private struct TimelinePlansCache {
 }
 
 private struct TimelinePlansCacheKey: Equatable {
-    let selectedDay: Date
+    let timelineCenterDay: Date
     let items: [EventSnapshot]
     let calendarLinks: [CalendarLinkSnapshot]
     let template: DayTemplateSnapshot

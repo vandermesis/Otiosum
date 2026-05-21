@@ -214,6 +214,28 @@ struct PlannerTests {
         #expect(snapshot.wakeUpMinutes == 6 * 60)
         #expect(snapshot.includeWorkout == false)
     }
+
+    @Test("Shell timeline plans follow the visible center day")
+    func testShellTimelinePlansFollowVisibleCenterDay() async throws {
+        let shellViewModel = PlannerShellViewModel()
+        let calendar = Calendar.current
+        let selectedDay = date(year: 2026, month: 4, day: 22)
+        let centerDate = date(year: 2026, month: 5, day: 10)
+        shellViewModel.selectedDay = selectedDay
+
+        let plans = shellViewModel.makeTimelinePlans(
+            items: [],
+            calendarLinks: [],
+            template: .default,
+            budget: .default,
+            sceneIsActive: true,
+            timelineCenterDate: centerDate
+        )
+
+        #expect(plans.count == 7)
+        #expect(plans.first?.0 == calendar.date(byAdding: .day, value: -3, to: centerDate))
+        #expect(plans.last?.0 == calendar.date(byAdding: .day, value: 3, to: centerDate))
+    }
     
     // MARK: - Type & Utility Tests
     

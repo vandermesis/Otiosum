@@ -72,15 +72,19 @@ final class OtiosumUITests: XCTestCase {
         let app = launchApp(extraArguments: ["UITEST_TIMELINE_TASK"])
 
         let taskIdentifier = "ui-timeline-task"
-        let markDoneButton = app.buttons["timeline-task-done-\(taskIdentifier)"]
-        if markDoneButton.waitForExistence(timeout: 4) == false {
+        let startButton = app.buttons["timeline-task-start-\(taskIdentifier)"]
+        if startButton.waitForExistence(timeout: 4) == false {
             let timeline = app.scrollViews.firstMatch
             if timeline.waitForExistence(timeout: 2) {
                 timeline.swipeUp()
                 timeline.swipeDown()
             }
         }
-        XCTAssertTrue(markDoneButton.waitForExistence(timeout: 2))
+        XCTAssertTrue(startButton.waitForExistence(timeout: 2))
+        startButton.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+
+        let markDoneButton = app.buttons["timeline-task-done-\(taskIdentifier)"]
+        XCTAssertTrue(markDoneButton.waitForExistence(timeout: 5))
         markDoneButton.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
     }
 

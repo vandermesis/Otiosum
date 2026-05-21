@@ -24,8 +24,8 @@ struct InferenceEngineTests {
         #expect(assessment.confidence == 1)
     }
 
-    @Test("Protected blocks are marked as protected time")
-    func protectedBlockAssessment() {
+    @Test("Template blocks are assessed like regular timeline work")
+    func templateBlockAssessment() {
         let now = Date(timeIntervalSinceReferenceDate: 2_000)
         let block = makeBlock(
             start: now.addingTimeInterval(-600),
@@ -40,8 +40,7 @@ struct InferenceEngineTests {
             context: InferenceContext(now: now, isSceneActive: false, lastUserInteraction: nil)
         )
 
-        #expect(assessment.status == .protectedTime)
-        #expect(assessment.confidence == 1)
+        #expect(assessment.status == .likelyInProgress)
     }
 
     @Test("Local protected category blocks are assessed like editable work")

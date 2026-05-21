@@ -67,7 +67,7 @@ struct TimeWheelView: View {
     var body: some View {
         TimelineView(.periodic(from: .now, by: 30)) { context in
             let now = context.date
-            let range = timelineRange(reference: now)
+            let range = timelineRange(reference: scrollAnchorDate ?? day)
 
             GeometryReader { proxy in
                 let laneWidth = max(
@@ -270,7 +270,7 @@ struct TimeWheelView: View {
     }
 
     private func isDraggable(_ block: PlannedBlock) -> Bool {
-        block.source == .local && block.isProtected == false && block.isCompleted == false
+        (block.source == .local || block.source == .template) && block.isCompleted == false && block.isStarted == false
     }
 
     private func fixedConflict(for movingBlock: PlannedBlock, proposedStart: Date) -> PlannedBlock? {
@@ -279,8 +279,6 @@ struct TimeWheelView: View {
         return blocks.first { block in
             guard block.id != movingBlock.id else { return false }
             guard block.isAllDay == false else { return false }
-            let fixed = block.isProtected || block.source == .calendar || block.flexibility == .locked
-            guard fixed else { return false }
             return proposedStart < block.end && proposedEnd > block.start
         }
     }
@@ -521,7 +519,7 @@ private struct TimelineCanvasView: View {
                 pointsPerMinute: pointsPerMinute,
                 isCurrent: block.id == currentBlockID,
                 isNext: block.id == nextBlockID,
-                draggable: block.source == .local && block.isProtected == false && block.isCompleted == false,
+                draggable: isDraggable(block),
                 height: max(height(for: block), 44),
                 onDragChanged: { proposed in
                     onDragChanged(block, proposed)
@@ -542,6 +540,10 @@ private struct TimelineCanvasView: View {
 
     private func height(for block: PlannedBlock) -> CGFloat {
         CGFloat(max(block.durationMinutes, slotMinutes)) * pointsPerMinute
+    }
+
+    private func isDraggable(_ block: PlannedBlock) -> Bool {
+        (block.source == .local || block.source == .template) && block.isCompleted == false && block.isStarted == false
     }
 
     private func yOffset(for date: Date) -> CGFloat {
@@ -814,6 +816,10 @@ private struct TimelineTaskCapsule: View {
             return "checkmark.circle.fill"
         }
 
+        if block.isStarted {
+            return now >= block.end ? "checkmark.circle.fill" : "play.circle.fill"
+        }
+
         if now > block.end {
             return "exclamationmark.circle"
         }
@@ -838,6 +844,10 @@ private struct TimelineTaskCapsule: View {
             return .green.opacity(0.5)
         }
 
+        if block.isStarted {
+            return tintColor(token: block.tintToken).opacity(0.85)
+        }
+
         if now > block.end {
             return .red.opacity(0.5)
         }
@@ -851,21 +861,14 @@ private struct TimelineTaskCapsule: View {
 
     @ViewBuilder
     private var timelineActionButton: some View {
-        if block.source == .template {
-            Button("Start", systemImage: "play.fill") {
-                onQuickAction(.startNow)
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-            .accessibilityIdentifier("timeline-task-start-\(block.title.testingIdentifier)")
-        } else if block.isCompleted {
+        if block.isCompleted || (block.isStarted && now >= block.end) {
             Button("Undo", systemImage: "arrow.uturn.backward") {
                 onQuickAction(.markUndone)
             }
             .buttonStyle(.bordered)
             .controlSize(.small)
             .accessibilityIdentifier("timeline-task-undo-\(block.title.testingIdentifier)")
-        } else if isCurrent || now >= block.start {
+        } else if block.isStarted {
             Button("Done", systemImage: "checkmark") {
                 onQuickAction(.markDone)
             }

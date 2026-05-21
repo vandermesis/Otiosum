@@ -153,6 +153,9 @@ final class PlannerStore {
         modelContext: ModelContext
     ) {
         event.isCompleted.toggle()
+        if event.isCompleted {
+            event.isStarted = false
+        }
         try? modelContext.save()
     }
 
@@ -162,6 +165,34 @@ final class PlannerStore {
         modelContext: ModelContext
     ) {
         event.isCompleted = isCompleted
+        if isCompleted {
+            event.isStarted = false
+        }
+        try? modelContext.save()
+    }
+
+    func completeFinishedStartedEvents(
+        now: Date = .now,
+        modelContext: ModelContext
+    ) {
+        let descriptor = FetchDescriptor<Event>(
+            predicate: #Predicate { event in
+                event.isStarted && event.isCompleted == false
+            }
+        )
+        guard let events = try? modelContext.fetch(descriptor) else { return }
+
+        for event in events {
+            guard let scheduledDay = event.scheduledDay else { continue }
+            let startMinutes = event.preferredStartMinutes ?? event.preferredTimeWindow.startMinutes
+            let start = Calendar.current.date(on: scheduledDay, minutesFromStartOfDay: startMinutes)
+            let end = start.adding(minutes: max(event.targetDurationMinutes, event.minimumDurationMinutes))
+            guard now >= end else { continue }
+
+            event.isCompleted = true
+            event.isStarted = false
+        }
+
         try? modelContext.save()
     }
 
@@ -175,6 +206,7 @@ final class PlannerStore {
         event.preferredStartMinutes = max(0, min(23 * 60 + 55, start.minutesSinceStartOfDay(using: calendar)))
         event.preferredTimeWindow = inferredWindow(for: start)
         event.isCompleted = false
+        event.isStarted = true
         event.isSavedForLater = false
         event.forceAfterBedtime = false
         try? modelContext.save()
@@ -204,6 +236,38 @@ final class PlannerStore {
             protectedCategory: block.protectedCategory,
             notes: block.notes,
             isCompleted: false,
+            isStarted: true,
+            isSavedForLater: false
+        )
+
+        modelContext.insert(event)
+        try? modelContext.save()
+    }
+
+    func scheduleTemplateBlock(
+        _ block: PlannedBlock,
+        to start: Date,
+        modelContext: ModelContext
+    ) {
+        guard block.source == .template else { return }
+
+        let calendar = Calendar.current
+        let preferredStartMinutes = max(0, min(23 * 60 + 55, start.minutesSinceStartOfDay(using: calendar)))
+        let event = Event(
+            title: block.title,
+            source: .local,
+            suggestedIcon: block.symbolName,
+            tintToken: block.tintToken,
+            targetDurationMinutes: max(15, block.durationMinutes),
+            minimumDurationMinutes: 15,
+            scheduledDay: calendar.startOfDay(for: start),
+            preferredStartMinutes: preferredStartMinutes,
+            preferredTimeWindow: inferredWindow(for: start),
+            flexibility: .flexible,
+            protectedCategory: block.protectedCategory,
+            notes: block.notes,
+            isCompleted: false,
+            isStarted: false,
             isSavedForLater: false
         )
 

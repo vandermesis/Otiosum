@@ -18,6 +18,7 @@ final class Event {
     var protectedCategoryRaw: String?
     var notes: String
     var isCompleted: Bool
+    var isStarted: Bool = false
     var createdAt: Date
     var orderHint: Double
     @Attribute(originalName: "isArchived") var isSavedForLater: Bool
@@ -39,6 +40,7 @@ final class Event {
         protectedCategory: ProtectedCategory? = nil,
         notes: String = "",
         isCompleted: Bool = false,
+        isStarted: Bool = false,
         createdAt: Date = .now,
         orderHint: Double = .random(in: 0..<1_000_000),
         isSavedForLater: Bool = false,
@@ -59,6 +61,7 @@ final class Event {
         self.protectedCategoryRaw = protectedCategory?.rawValue
         self.notes = notes
         self.isCompleted = isCompleted
+        self.isStarted = isStarted
         self.createdAt = createdAt
         self.orderHint = orderHint
         self.isSavedForLater = isSavedForLater
@@ -105,6 +108,7 @@ final class Event {
             protectedCategory: protectedCategory,
             notes: notes,
             isCompleted: isCompleted,
+            isStarted: isStarted,
             orderHint: orderHint,
             isSavedForLater: isSavedForLater,
             forceAfterBedtime: forceAfterBedtime

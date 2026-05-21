@@ -74,8 +74,8 @@ struct PlannerEngineTests {
         }
     }
 
-    @Test("Overrun shifts later flexible work and creates a calendar shift proposal")
-    func overrunShiftsLaterBlocks() throws {
+    @Test("Current-time push shifts later flexible work without overlapping")
+    func currentTimePushShiftsLaterBlocks() throws {
         let day = try makeDate(year: 2026, month: 4, day: 20, hour: 0, minute: 0)
         let activeItemID = UUID()
         let trailingItemID = UUID()
@@ -158,9 +158,138 @@ struct PlannerEngineTests {
         let activeBlock = try #require(plan.allBlocks.first(where: { $0.itemID == activeItemID }))
         let trailingBlock = try #require(plan.allBlocks.first(where: { $0.itemID == trailingItemID }))
 
-        #expect(activeBlock.end > day.adding(minutes: 10 * 60 + 30))
+        #expect(activeBlock.start >= day.adding(minutes: 11 * 60 + 10))
         #expect(trailingBlock.start >= activeBlock.end)
-        #expect(plan.shiftProposals.contains(where: { $0.calendarEventID == "calendar-1" }))
+        #expect(plan.shiftProposals.isEmpty)
+    }
+
+    @Test("Overdue incomplete work is pushed to the current time")
+    func overdueIncompleteWorkStartsAtCurrentTime() throws {
+        let day = try makeDate(year: 2026, month: 4, day: 20, hour: 0, minute: 0)
+        let overdueItemID = UUID()
+        let trailingItemID = UUID()
+
+        let items = [
+            EventSnapshot(
+                id: overdueItemID,
+                title: "Plan week",
+                source: .local,
+                suggestedIcon: "calendar",
+                tintToken: "teal",
+                targetDurationMinutes: 30,
+                minimumDurationMinutes: 15,
+                scheduledDay: day,
+                preferredStartMinutes: 8 * 60,
+                preferredTimeWindow: .morning,
+                flexibility: .flexible,
+                calendarEventID: nil,
+                protectedCategory: nil,
+                notes: "",
+                isCompleted: false,
+                orderHint: 1,
+                isSavedForLater: false,
+                forceAfterBedtime: false
+            ),
+            EventSnapshot(
+                id: trailingItemID,
+                title: "Inbox",
+                source: .local,
+                suggestedIcon: "tray.full",
+                tintToken: "mint",
+                targetDurationMinutes: 30,
+                minimumDurationMinutes: 15,
+                scheduledDay: day,
+                preferredStartMinutes: 12 * 60 + 15,
+                preferredTimeWindow: .afternoon,
+                flexibility: .flexible,
+                calendarEventID: nil,
+                protectedCategory: nil,
+                notes: "",
+                isCompleted: false,
+                orderHint: 2,
+                isSavedForLater: false,
+                forceAfterBedtime: false
+            )
+        ]
+
+        let now = day.adding(minutes: 12 * 60 + 2)
+        let plan = engine.plan(
+            for: day,
+            localItems: items,
+            calendarEvents: [],
+            calendarLinks: [],
+            template: .default,
+            budget: .default,
+            context: InferenceContext(
+                now: now,
+                isSceneActive: true,
+                lastUserInteraction: nil
+            )
+        )
+
+        let overdueBlock = try #require(plan.allBlocks.first(where: { $0.itemID == overdueItemID }))
+        let trailingBlock = try #require(plan.allBlocks.first(where: { $0.itemID == trailingItemID }))
+        #expect(overdueBlock.start >= day.adding(minutes: 12 * 60 + 5))
+        #expect(trailingBlock.start >= overdueBlock.end)
+    }
+
+    @Test("Overdue launch pushes missed workout forward")
+    func overdueLaunchPushesMissedWorkoutForward() throws {
+        let day = try makeDate(year: 2026, month: 4, day: 20, hour: 0, minute: 0)
+        let launchItemID = UUID()
+        let launch = EventSnapshot(
+            id: launchItemID,
+            title: "Launch",
+            source: .local,
+            suggestedIcon: "paperplane.fill",
+            tintToken: "teal",
+            targetDurationMinutes: 30,
+            minimumDurationMinutes: 15,
+            scheduledDay: day,
+            preferredStartMinutes: 17 * 60,
+            preferredTimeWindow: .evening,
+            flexibility: .flexible,
+            calendarEventID: nil,
+            protectedCategory: nil,
+            notes: "",
+            isCompleted: false,
+            orderHint: 1,
+            isSavedForLater: false,
+            forceAfterBedtime: false
+        )
+        let template = DayTemplateSnapshot(
+            wakeUpMinutes: DayTemplateSnapshot.default.wakeUpMinutes,
+            sleepStartMinutes: 23 * 60,
+            breakfastMinutes: DayTemplateSnapshot.default.breakfastMinutes,
+            lunchMinutes: DayTemplateSnapshot.default.lunchMinutes,
+            dinnerMinutes: 21 * 60,
+            quietStartMinutes: 22 * 60,
+            quietDurationMinutes: DayTemplateSnapshot.default.quietDurationMinutes,
+            workoutMinutes: 17 * 60 + 30,
+            workoutDurationMinutes: 45,
+            includeWorkout: true,
+            transitionBufferMinutes: DayTemplateSnapshot.default.transitionBufferMinutes
+        )
+
+        let now = day.adding(minutes: 18 * 60 + 2)
+        let plan = engine.plan(
+            for: day,
+            localItems: [launch],
+            calendarEvents: [],
+            calendarLinks: [],
+            template: template,
+            budget: .default,
+            context: InferenceContext(
+                now: now,
+                isSceneActive: true,
+                lastUserInteraction: nil
+            )
+        )
+
+        let launchBlock = try #require(plan.allBlocks.first(where: { $0.itemID == launchItemID }))
+        let workoutBlock = try #require(plan.allBlocks.first(where: { $0.protectedCategory == .workout }))
+        #expect(launchBlock.start >= day.adding(minutes: 18 * 60 + 5))
+        #expect(workoutBlock.start >= launchBlock.end)
     }
 
     @Test("Planner warns when a new item would cut into bedtime")
@@ -201,8 +330,8 @@ struct PlannerEngineTests {
         #expect(plan.warnings.contains(where: { $0.message == "Not enough room today." }))
     }
 
-    @Test("Protected meal blocks stay in place when flexible work overlaps them")
-    func protectedMealBlocksStayProtected() throws {
+    @Test("Recurring meal blocks behave like timeline tasks when flexible work overlaps them")
+    func recurringMealBlocksBehaveLikeTimelineTasks() throws {
         let day = try makeDate(year: 2026, month: 4, day: 21, hour: 0, minute: 0)
         let overlappingItem = EventSnapshot(
             id: UUID(),
@@ -235,10 +364,10 @@ struct PlannerEngineTests {
             context: InferenceContext(now: day.adding(minutes: 12 * 60), isSceneActive: true, lastUserInteraction: day.adding(minutes: 12 * 60))
         )
 
-        let lunchBlock = try #require(plan.protectedBlocks.first(where: { $0.title == "Lunch" }))
+        let lunchBlock = try #require(plan.allBlocks.first(where: { $0.title == "Lunch" }))
         let localBlock = try #require(plan.allBlocks.first(where: { $0.itemID == overlappingItem.id }))
 
-        #expect(lunchBlock.isProtected)
+        #expect(lunchBlock.isProtected == false)
         #expect(localBlock.start >= lunchBlock.end)
     }
 
