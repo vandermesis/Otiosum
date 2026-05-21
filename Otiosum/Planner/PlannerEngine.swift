@@ -25,30 +25,30 @@ struct PlannerEngine {
         let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay) ?? startOfDay.adding(minutes: 24 * 60)
         let sleepBoundary = calendar.date(on: day, minutesFromStartOfDay: template.sleepStartMinutes)
 
-        let templateProtectedBlocks = makeProtectedBlocks(
+        let templateBlocks = makeTemplateBlocks(
             for: day,
             template: template,
             budget: budget,
             endOfDay: endOfDay
         )
-        let protectedTemplateOverrides = localItems.filter { item in
+        let templateOverrides = localItems.filter { item in
             guard let scheduledDay = item.scheduledDay else { return false }
             return item.source == .local
-                && item.protectedCategory != nil
+                && item.routineRole != nil
                 && item.isSavedForLater == false
                 && calendar.isDate(scheduledDay, inSameDayAs: day)
-                && templateProtectedBlocks.contains { block in
-                    block.title == item.title && block.protectedCategory == item.protectedCategory
+                && templateBlocks.contains { block in
+                    block.title == item.title && block.routineRole == item.routineRole
                 }
         }
-        let protectedTemplateOverrideIDs = Set(protectedTemplateOverrides.map(\.id))
-        let localProtectedOverrideBlocks = protectedTemplateOverrides.map {
-            makeLocalProtectedOverrideBlock(item: $0, day: day, endOfDay: endOfDay)
+        let templateOverrideIDs = Set(templateOverrides.map(\.id))
+        let localTemplateOverrideBlocks = templateOverrides.map {
+            makeLocalTemplateOverrideBlock(item: $0, day: day, endOfDay: endOfDay)
         }
-        let protectedBlocks = templateProtectedBlocks
+        let routineBlocks = templateBlocks
         .filter { block in
-            protectedTemplateOverrides.contains { override in
-                override.title == block.title && override.protectedCategory == block.protectedCategory
+            templateOverrides.contains { override in
+                override.title == block.title && override.routineRole == block.routineRole
             } == false
         }
 
@@ -63,7 +63,7 @@ struct PlannerEngine {
         let allDayCalendarBlocks = calendarBlocks.filter(\.isAllDay)
         let timedCalendarBlocks = calendarBlocks.filter { !$0.isAllDay }
 
-        var allBlocks = (protectedBlocks + timedCalendarBlocks + localProtectedOverrideBlocks).sorted(by: blockSort)
+        var allBlocks = (routineBlocks + timedCalendarBlocks + localTemplateOverrideBlocks).sorted(by: blockSort)
         var tooMuchTodayIssues: [TooMuchTodayIssue] = []
 
         let scheduledItems = localItems
@@ -71,7 +71,7 @@ struct PlannerEngine {
                 guard let scheduledDay = item.scheduledDay else { return false }
                 return calendar.isDate(scheduledDay, inSameDayAs: day)
                     && item.isSavedForLater == false
-                    && protectedTemplateOverrideIDs.contains(item.id) == false
+                    && templateOverrideIDs.contains(item.id) == false
             }
             .sorted(by: localItemSort)
 
@@ -134,7 +134,6 @@ struct PlannerEngine {
             nowBlock: nowBlock,
             nextBlock: nextBlock,
             laterBlocks: laterBlocks,
-            protectedBlocks: [],
             warnings: warnings,
             tooMuchTodayIssues: deduplicated(tooMuchTodayIssues),
             shiftProposals: [],
@@ -169,7 +168,7 @@ struct PlannerEngine {
                         message: item.forceAfterBedtime
                             ? "There is no calm slot left today."
                             : "Not enough room today. This would cut into sleep or recovery.",
-                        displacedCategory: item.forceAfterBedtime ? nil : .sleep,
+                        displacedRole: item.forceAfterBedtime ? nil : .sleep,
                         suggestedDate: calendar.date(byAdding: .day, value: 1, to: day) ?? day
                     )
                 )
@@ -193,7 +192,7 @@ struct PlannerEngine {
                 tintToken: item.tintToken,
                 notes: item.notes,
                 isAllDay: false,
-                protectedCategory: item.protectedCategory,
+                routineRole: item.routineRole,
                 isCompleted: item.isCompleted,
                 isStarted: item.isStarted,
                 status: item.isCompleted ? .complete : .upcoming,
@@ -207,13 +206,13 @@ struct PlannerEngine {
                 itemID: item.id,
                 title: item.title,
                 message: "This can wait. The day is already full.",
-                displacedCategory: nil,
+                displacedRole: nil,
                 suggestedDate: calendar.date(byAdding: .day, value: 1, to: day) ?? day
             )
         )
     }
 
-    private func makeLocalProtectedOverrideBlock(
+    private func makeLocalTemplateOverrideBlock(
         item: EventSnapshot,
         day: Date,
         endOfDay: Date
@@ -236,7 +235,7 @@ struct PlannerEngine {
             tintToken: item.tintToken,
             notes: item.notes,
             isAllDay: false,
-            protectedCategory: item.protectedCategory,
+            routineRole: item.routineRole,
             isCompleted: item.isCompleted,
             isStarted: item.isStarted,
             status: item.isCompleted ? .complete : .upcoming,
@@ -264,7 +263,7 @@ struct PlannerEngine {
                 tintToken: block.tintToken,
                 notes: block.notes,
                 isAllDay: block.isAllDay,
-                protectedCategory: block.protectedCategory,
+                routineRole: block.routineRole,
                 isCompleted: resolvedCompletion,
                 isStarted: resolvedCompletion ? false : block.isStarted,
                 status: assessment.status,
@@ -274,7 +273,7 @@ struct PlannerEngine {
         .sorted(by: blockSort)
     }
 
-    private func makeProtectedBlocks(
+    private func makeTemplateBlocks(
         for day: Date,
         template: DayTemplateSnapshot,
         budget: DailyBudgetSnapshot,
@@ -283,7 +282,7 @@ struct PlannerEngine {
         var blocks: [PlannedBlock] = []
         let mealDuration = budget.mealDurationMinutes
 
-        let breakfast = makeProtectedBlock(
+        let breakfast = makeTemplateBlock(
             title: "Breakfast",
             symbol: "fork.knife",
             tintToken: "peach",
@@ -292,7 +291,7 @@ struct PlannerEngine {
             startMinutes: template.breakfastMinutes,
             durationMinutes: mealDuration
         )
-        let lunch = makeProtectedBlock(
+        let lunch = makeTemplateBlock(
             title: "Lunch",
             symbol: "fork.knife",
             tintToken: "peach",
@@ -301,7 +300,7 @@ struct PlannerEngine {
             startMinutes: template.lunchMinutes,
             durationMinutes: mealDuration
         )
-        let dinner = makeProtectedBlock(
+        let dinner = makeTemplateBlock(
             title: "Dinner",
             symbol: "fork.knife",
             tintToken: "peach",
@@ -310,7 +309,7 @@ struct PlannerEngine {
             startMinutes: template.dinnerMinutes,
             durationMinutes: mealDuration
         )
-        let quiet = makeProtectedBlock(
+        let quiet = makeTemplateBlock(
             title: "Recovery",
             symbol: "leaf.fill",
             tintToken: "sage",
@@ -319,7 +318,7 @@ struct PlannerEngine {
             startMinutes: template.quietStartMinutes,
             durationMinutes: template.quietDurationMinutes
         )
-        let sleep = makeProtectedBlock(
+        let sleep = makeTemplateBlock(
             title: "Sleep",
             symbol: "bed.double.fill",
             tintToken: "indigo",
@@ -333,7 +332,7 @@ struct PlannerEngine {
 
         if template.includeWorkout {
             blocks.append(
-                makeProtectedBlock(
+                makeTemplateBlock(
                     title: "Workout",
                     symbol: "figure.walk",
                     tintToken: "lime",
@@ -348,11 +347,11 @@ struct PlannerEngine {
         return blocks.sorted(by: blockSort)
     }
 
-    private func makeProtectedBlock(
+    private func makeTemplateBlock(
         title: String,
         symbol: String,
         tintToken: String,
-        category: ProtectedCategory,
+        category: RoutineRole,
         day: Date,
         startMinutes: Int,
         durationMinutes: Int? = nil,
@@ -373,7 +372,7 @@ struct PlannerEngine {
             tintToken: tintToken,
             notes: "",
             isAllDay: false,
-            protectedCategory: category,
+            routineRole: category,
             isCompleted: false,
             isStarted: false,
             status: .upcoming,
@@ -409,7 +408,7 @@ struct PlannerEngine {
                 tintToken: icon.tintToken,
                 notes: event.notes,
                 isAllDay: event.isAllDay,
-                protectedCategory: nil,
+                routineRole: nil,
                 isCompleted: false,
                 isStarted: false,
                 status: .upcoming,
@@ -427,15 +426,15 @@ struct PlannerEngine {
             .filter { $0.isAllDay == false && $0.isCompleted == false }
             .reduce(0) { $0 + $1.durationMinutes }
         let restMinutes = blocks
-            .filter { $0.protectedCategory == .rest }
+            .filter { $0.routineRole == .rest }
             .reduce(0) { $0 + $1.durationMinutes }
-        let sleepMinutesProtected = Int(budget.minimumSleepHours * 60)
+        let sleepMinutesRoutine = Int(budget.minimumSleepHours * 60)
         let scheduledCount = blocks.filter { $0.isAllDay == false && $0.isCompleted == false }.count
 
         return BudgetUsageSummary(
             workMinutes: workMinutes,
             restMinutes: restMinutes,
-            sleepMinutesProtected: sleepMinutesProtected,
+            sleepMinutesRoutine: sleepMinutesRoutine,
             scheduledCount: scheduledCount
         )
     }
@@ -491,7 +490,7 @@ struct PlannerEngine {
             )
         }
 
-        let afterSleep = blocks.filter { $0.isProtected == false && $0.end > sleepBoundary }
+        let afterSleep = blocks.filter { $0.end > sleepBoundary }
         if afterSleep.isEmpty == false {
             warnings.append(
                 GuardrailWarning(
@@ -541,7 +540,7 @@ struct PlannerEngine {
             tintToken: block.tintToken,
             notes: block.notes,
             isAllDay: block.isAllDay,
-            protectedCategory: block.protectedCategory,
+            routineRole: block.routineRole,
             isCompleted: block.isCompleted,
             isStarted: block.isStarted,
             status: block.status,
@@ -562,10 +561,7 @@ struct PlannerEngine {
 
     private func blockSort(_ lhs: PlannedBlock, _ rhs: PlannedBlock) -> Bool {
         if lhs.start == rhs.start {
-            if lhs.isProtected == rhs.isProtected {
-                return lhs.end < rhs.end
-            }
-            return lhs.isProtected
+            return lhs.end < rhs.end
         }
 
         return lhs.start < rhs.start

@@ -56,7 +56,7 @@ enum PreferredTimeWindow: String, Codable, CaseIterable, Identifiable, Sendable 
     }
 }
 
-enum ProtectedCategory: String, Codable, CaseIterable, Identifiable, Sendable {
+enum RoutineRole: String, Codable, CaseIterable, Identifiable, Sendable {
     case sleep
     case meal
     case rest
@@ -121,7 +121,6 @@ enum InferredProgressStatus: String, Codable, CaseIterable, Identifiable, Sendab
     case likelyInProgress
     case gentlyLate
     case complete
-    case protectedTime
     case waiting
 
     var id: String { rawValue }
@@ -188,7 +187,7 @@ struct EventSnapshot: Identifiable, Equatable, Sendable {
     let preferredTimeWindow: PreferredTimeWindow
     let flexibility: PlannerFlexibility
     let calendarEventID: String?
-    let protectedCategory: ProtectedCategory?
+    let routineRole: RoutineRole?
     let notes: String
     let isCompleted: Bool
     let isStarted: Bool
@@ -209,7 +208,7 @@ struct EventSnapshot: Identifiable, Equatable, Sendable {
         preferredTimeWindow: PreferredTimeWindow,
         flexibility: PlannerFlexibility,
         calendarEventID: String?,
-        protectedCategory: ProtectedCategory?,
+        routineRole: RoutineRole?,
         notes: String,
         isCompleted: Bool,
         isStarted: Bool = false,
@@ -229,7 +228,7 @@ struct EventSnapshot: Identifiable, Equatable, Sendable {
         self.preferredTimeWindow = preferredTimeWindow
         self.flexibility = flexibility
         self.calendarEventID = calendarEventID
-        self.protectedCategory = protectedCategory
+        self.routineRole = routineRole
         self.notes = notes
         self.isCompleted = isCompleted
         self.isStarted = isStarted
@@ -238,9 +237,6 @@ struct EventSnapshot: Identifiable, Equatable, Sendable {
         self.forceAfterBedtime = forceAfterBedtime
     }
 
-    var isProtected: Bool {
-        false
-    }
 }
 
 struct CalendarEventSnapshot: Identifiable, Equatable, Sendable {
@@ -326,7 +322,7 @@ struct PlannedBlock: Identifiable, Equatable, Sendable {
     let tintToken: String
     let notes: String
     let isAllDay: Bool
-    let protectedCategory: ProtectedCategory?
+    let routineRole: RoutineRole?
     let isCompleted: Bool
     let isStarted: Bool
     let status: InferredProgressStatus
@@ -345,7 +341,7 @@ struct PlannedBlock: Identifiable, Equatable, Sendable {
         tintToken: String,
         notes: String,
         isAllDay: Bool,
-        protectedCategory: ProtectedCategory?,
+        routineRole: RoutineRole?,
         isCompleted: Bool,
         isStarted: Bool = false,
         status: InferredProgressStatus,
@@ -363,7 +359,7 @@ struct PlannedBlock: Identifiable, Equatable, Sendable {
         self.tintToken = tintToken
         self.notes = notes
         self.isAllDay = isAllDay
-        self.protectedCategory = protectedCategory
+        self.routineRole = routineRole
         self.isCompleted = isCompleted
         self.isStarted = isStarted
         self.status = status
@@ -374,9 +370,6 @@ struct PlannedBlock: Identifiable, Equatable, Sendable {
         Int(end.timeIntervalSince(start) / 60)
     }
 
-    var isProtected: Bool {
-        false
-    }
 }
 
 struct GuardrailWarning: Identifiable, Equatable, Sendable {
@@ -391,7 +384,7 @@ struct TooMuchTodayIssue: Identifiable, Equatable, Sendable {
     let itemID: UUID
     let title: String
     let message: String
-    let displacedCategory: ProtectedCategory?
+    let displacedRole: RoutineRole?
     let suggestedDate: Date
 }
 
@@ -408,7 +401,7 @@ struct CalendarShiftProposal: Identifiable, Equatable, Sendable {
 struct BudgetUsageSummary: Equatable, Sendable {
     let workMinutes: Int
     let restMinutes: Int
-    let sleepMinutesProtected: Int
+    let sleepMinutesRoutine: Int
     let scheduledCount: Int
 }
 
@@ -418,7 +411,6 @@ struct DayPlan: Equatable, Sendable {
     let nowBlock: PlannedBlock?
     let nextBlock: PlannedBlock?
     let laterBlocks: [PlannedBlock]
-    let protectedBlocks: [PlannedBlock]
     let warnings: [GuardrailWarning]
     let tooMuchTodayIssues: [TooMuchTodayIssue]
     let shiftProposals: [CalendarShiftProposal]

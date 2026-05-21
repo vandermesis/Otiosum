@@ -59,7 +59,7 @@ struct TimelineScheduler {
                         itemID: source.itemID,
                         title: source.title,
                         message: "This plan is starting to push sleep.",
-                        displacedCategory: .sleep,
+                        displacedRole: .sleep,
                         suggestedDate: calendar.date(byAdding: .day, value: 1, to: dayStart) ?? dayStart
                     )
                 )
@@ -146,7 +146,7 @@ struct TimelineScheduler {
     }
 
     private func isSleep(_ block: PlannedBlock) -> Bool {
-        block.protectedCategory == .sleep || block.title.localizedCaseInsensitiveCompare("Sleep") == .orderedSame
+        block.routineRole == .sleep || block.title.localizedCaseInsensitiveCompare("Sleep") == .orderedSame
     }
 
     private func shifted(
@@ -167,7 +167,7 @@ struct TimelineScheduler {
             tintToken: block.tintToken,
             notes: block.notes,
             isAllDay: block.isAllDay,
-            protectedCategory: block.protectedCategory,
+            routineRole: block.routineRole,
             isCompleted: block.isCompleted,
             isStarted: block.isStarted,
             status: block.status,

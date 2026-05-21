@@ -288,7 +288,7 @@ final class PlannerShellViewModel {
     ) {
         registerInteraction()
         if block.source == .template {
-            store.startProtectedBlockNow(block, modelContext: modelContext)
+            store.startTemplateBlockNow(block, modelContext: modelContext)
         } else if block.source == .local, let event = itemLookup[block.itemID] {
             store.startEventNow(event, modelContext: modelContext)
         }

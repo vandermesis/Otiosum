@@ -35,7 +35,7 @@ struct PlannerTests {
             preferredTimeWindow: preferredTimeWindow,
             flexibility: .flexible,
             calendarEventID: nil,
-            protectedCategory: nil,
+            routineRole: nil,
             notes: "",
             isCompleted: false,
             orderHint: 0.5,
@@ -46,8 +46,8 @@ struct PlannerTests {
     
     // MARK: - PlannerEngine Tests
     
-    @Test("Protected blocks are generated from default template")
-    func testProtectedBlocksGeneration() async throws {
+    @Test("Routine blocks are generated from default template")
+    func testRoutineBlocksGeneration() async throws {
         let engine = PlannerEngine()
         let day = date(year: 2024, month: 1, day: 1)
         let context = InferenceContext(now: day, isSceneActive: true, lastUserInteraction: nil)
@@ -62,12 +62,12 @@ struct PlannerTests {
             context: context
         )
         
-        #expect(plan.allBlocks.contains { $0.title == "Breakfast" && $0.protectedCategory == .meal })
-        #expect(plan.allBlocks.contains { $0.title == "Lunch" && $0.protectedCategory == .meal })
-        #expect(plan.allBlocks.contains { $0.title == "Dinner" && $0.protectedCategory == .meal })
-        #expect(plan.allBlocks.contains { $0.title == "Recovery" && $0.protectedCategory == .rest })
-        #expect(plan.allBlocks.contains { $0.title == "Sleep" && $0.protectedCategory == .sleep })
-        #expect(plan.allBlocks.contains { $0.title == "Workout" && $0.protectedCategory == .workout })
+        #expect(plan.allBlocks.contains { $0.title == "Breakfast" && $0.routineRole == .meal })
+        #expect(plan.allBlocks.contains { $0.title == "Lunch" && $0.routineRole == .meal })
+        #expect(plan.allBlocks.contains { $0.title == "Dinner" && $0.routineRole == .meal })
+        #expect(plan.allBlocks.contains { $0.title == "Recovery" && $0.routineRole == .rest })
+        #expect(plan.allBlocks.contains { $0.title == "Sleep" && $0.routineRole == .sleep })
+        #expect(plan.allBlocks.contains { $0.title == "Workout" && $0.routineRole == .workout })
     }
     
     @Test("Local items are scheduled within preferred time window")

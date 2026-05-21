@@ -212,7 +212,7 @@ final class PlannerStore {
         try? modelContext.save()
     }
 
-    func startProtectedBlockNow(
+    func startTemplateBlockNow(
         _ block: PlannedBlock,
         at start: Date? = nil,
         modelContext: ModelContext
@@ -233,7 +233,7 @@ final class PlannerStore {
             preferredStartMinutes: preferredStartMinutes,
             preferredTimeWindow: inferredWindow(for: resolvedStart),
             flexibility: .flexible,
-            protectedCategory: block.protectedCategory,
+            routineRole: block.routineRole,
             notes: block.notes,
             isCompleted: false,
             isStarted: true,
@@ -264,7 +264,7 @@ final class PlannerStore {
             preferredStartMinutes: preferredStartMinutes,
             preferredTimeWindow: inferredWindow(for: start),
             flexibility: .flexible,
-            protectedCategory: block.protectedCategory,
+            routineRole: block.routineRole,
             notes: block.notes,
             isCompleted: false,
             isStarted: false,
@@ -319,7 +319,7 @@ final class PlannerStore {
                 title: issue.title,
                 message: issue.message,
                 suggestedDate: issue.suggestedDate,
-                displacedCategory: issue.displacedCategory,
+                displacedRole: issue.displacedRole,
                 defaultChoice: .nextSuitableDay
             )
         } else {
@@ -483,7 +483,7 @@ struct PendingTooMuchTodayState: Identifiable {
     let title: String
     let message: String
     let suggestedDate: Date
-    let displacedCategory: ProtectedCategory?
+    let displacedRole: RoutineRole?
     let defaultChoice: TooMuchTodayChoice
 }
 

@@ -37,7 +37,7 @@ struct TodayScreen: View {
                 if calendarService.canReadEvents == false {
                     PlannerMessageCard(
                         title: "Calendar is optional",
-                        message: "Connect it when you want protected synced events to appear in the timeline.",
+                        message: "Connect it when you want synced events to appear in the timeline.",
                         actionTitle: "Connect Calendar",
                         action: onRequestCalendarAccess
                     )

@@ -18,10 +18,6 @@ struct InferenceEngine {
             return InferenceAssessment(status: .likelyInProgress, confidence: 1)
         }
 
-        if block.isProtected {
-            return InferenceAssessment(status: .protectedTime, confidence: 1)
-        }
-
         if now >= block.start && now <= block.end {
             return InferenceAssessment(
                 status: .likelyInProgress,

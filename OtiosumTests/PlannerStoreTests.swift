@@ -73,7 +73,7 @@ struct PlannerStoreTests {
             title: item.title,
             message: "Not enough room",
             suggestedDate: Date(timeIntervalSinceReferenceDate: 70_000),
-            displacedCategory: .sleep,
+            displacedRole: .sleep,
             defaultChoice: .nextSuitableDay
         )
 
@@ -108,7 +108,7 @@ struct PlannerStoreTests {
             title: item.title,
             message: "Not enough room",
             suggestedDate: Date(timeIntervalSinceReferenceDate: 81_000),
-            displacedCategory: .sleep,
+            displacedRole: .sleep,
             defaultChoice: .nextSuitableDay
         )
 
@@ -142,7 +142,7 @@ struct PlannerStoreTests {
             title: item.title,
             message: "Not enough room",
             suggestedDate: suggestedDate,
-            displacedCategory: .rest,
+            displacedRole: .rest,
             defaultChoice: .nextSuitableDay
         )
 
@@ -259,8 +259,8 @@ struct PlannerStoreTests {
         #expect(item.isSavedForLater == false)
     }
 
-    @Test("Starting protected template block creates local protected event")
-    func startProtectedTemplateBlockCreatesLocalEvent() throws {
+    @Test("Starting template block creates local event")
+    func startTemplateBlockCreatesLocalEvent() throws {
         let modelContext = try makeModelContext()
         let store = PlannerStore()
         let originalStart = Date(timeIntervalSinceReferenceDate: 150_000)
@@ -277,14 +277,14 @@ struct PlannerStoreTests {
             tintToken: "peach",
             notes: "",
             isAllDay: false,
-            protectedCategory: .meal,
+            routineRole: .meal,
             isCompleted: false,
-            status: .protectedTime,
+            status: .upcoming,
             confidence: 1
         )
         let start = Date(timeIntervalSinceReferenceDate: 160_000)
 
-        store.startProtectedBlockNow(block, at: start, modelContext: modelContext)
+        store.startTemplateBlockNow(block, at: start, modelContext: modelContext)
 
         let items = try modelContext.fetch(FetchDescriptor<Event>())
         let item = try #require(items.first)
@@ -292,14 +292,14 @@ struct PlannerStoreTests {
         #expect(items.count == 1)
         #expect(item.title == "Breakfast")
         #expect(item.source == .local)
-        #expect(item.protectedCategory == .meal)
+        #expect(item.routineRole == .meal)
         #expect(item.scheduledDay == calendar.startOfDay(for: start))
         #expect(item.preferredStartMinutes == start.minutesSinceStartOfDay(using: calendar))
         #expect(item.targetDurationMinutes == 40)
     }
 
-    @Test("Starting protected template block keeps its timeline position")
-    func startProtectedTemplateBlockKeepsTimelinePosition() throws {
+    @Test("Starting template block keeps its timeline position")
+    func startTemplateBlockKeepsTimelinePosition() throws {
         let modelContext = try makeModelContext()
         let store = PlannerStore()
         let calendar = Calendar.current
@@ -322,13 +322,13 @@ struct PlannerStoreTests {
             tintToken: "peach",
             notes: "",
             isAllDay: false,
-            protectedCategory: .meal,
+            routineRole: .meal,
             isCompleted: false,
-            status: .protectedTime,
+            status: .upcoming,
             confidence: 1
         )
 
-        store.startProtectedBlockNow(block, modelContext: modelContext)
+        store.startTemplateBlockNow(block, modelContext: modelContext)
 
         let item = try #require(try modelContext.fetch(FetchDescriptor<Event>()).first)
         #expect(item.scheduledDay == calendar.startOfDay(for: blockStart))
@@ -412,14 +412,14 @@ struct PlannerStoreTests {
             itemID: UUID(),
             title: "Too much today one",
             message: "First",
-            displacedCategory: .sleep,
+            displacedRole: .sleep,
             suggestedDate: now
         )
         let tooMuchTodayIssue2 = TooMuchTodayIssue(
             itemID: UUID(),
             title: "Too much today two",
             message: "Second",
-            displacedCategory: .rest,
+            displacedRole: .rest,
             suggestedDate: now.adding(minutes: 60)
         )
 
@@ -446,11 +446,10 @@ struct PlannerStoreTests {
             nowBlock: nil,
             nextBlock: nil,
             laterBlocks: [],
-            protectedBlocks: [],
             warnings: [],
             tooMuchTodayIssues: [tooMuchTodayIssue1, tooMuchTodayIssue2],
             shiftProposals: [shift1, shift2],
-            budgetSummary: BudgetUsageSummary(workMinutes: 0, restMinutes: 0, sleepMinutesProtected: 0, scheduledCount: 0)
+            budgetSummary: BudgetUsageSummary(workMinutes: 0, restMinutes: 0, sleepMinutesRoutine: 0, scheduledCount: 0)
         )
 
         let modelContext = try makeModelContext()

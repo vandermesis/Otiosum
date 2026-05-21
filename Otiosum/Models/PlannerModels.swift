@@ -15,7 +15,7 @@ final class Event {
     var preferredTimeWindowRaw: String
     var flexibilityRaw: String
     var calendarEventID: String?
-    var protectedCategoryRaw: String?
+    @Attribute(originalName: "protectedCategoryRaw") var routineRoleRaw: String?
     var notes: String
     var isCompleted: Bool
     var isStarted: Bool = false
@@ -37,7 +37,7 @@ final class Event {
         preferredTimeWindow: PreferredTimeWindow = .anytime,
         flexibility: PlannerFlexibility = .flexible,
         calendarEventID: String? = nil,
-        protectedCategory: ProtectedCategory? = nil,
+        routineRole: RoutineRole? = nil,
         notes: String = "",
         isCompleted: Bool = false,
         isStarted: Bool = false,
@@ -58,7 +58,7 @@ final class Event {
         self.preferredTimeWindowRaw = preferredTimeWindow.rawValue
         self.flexibilityRaw = flexibility.rawValue
         self.calendarEventID = calendarEventID
-        self.protectedCategoryRaw = protectedCategory?.rawValue
+        self.routineRoleRaw = routineRole?.rawValue
         self.notes = notes
         self.isCompleted = isCompleted
         self.isStarted = isStarted
@@ -83,12 +83,12 @@ final class Event {
         set { flexibilityRaw = newValue.rawValue }
     }
 
-    var protectedCategory: ProtectedCategory? {
+    var routineRole: RoutineRole? {
         get {
-            guard let protectedCategoryRaw else { return nil }
-            return ProtectedCategory(rawValue: protectedCategoryRaw)
+            guard let routineRoleRaw else { return nil }
+            return RoutineRole(rawValue: routineRoleRaw)
         }
-        set { protectedCategoryRaw = newValue?.rawValue }
+        set { routineRoleRaw = newValue?.rawValue }
     }
 
     var snapshot: EventSnapshot {
@@ -105,7 +105,7 @@ final class Event {
             preferredTimeWindow: preferredTimeWindow,
             flexibility: flexibility,
             calendarEventID: calendarEventID,
-            protectedCategory: protectedCategory,
+            routineRole: routineRole,
             notes: notes,
             isCompleted: isCompleted,
             isStarted: isStarted,

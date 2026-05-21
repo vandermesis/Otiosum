@@ -224,22 +224,6 @@ struct ScheduleBlockCard: View {
     }
 }
 
-struct ProtectedTimeSection: View {
-    let plan: DayPlan
-    let budget: DailyBudgetSnapshot
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Protected time")
-                .font(.title3.weight(.semibold))
-            BudgetSummaryCard(summary: plan.budgetSummary, budget: budget)
-            ForEach(plan.protectedBlocks) { block in
-                MiniBlockRow(block: block)
-            }
-        }
-    }
-}
-
 struct BudgetSummaryCard: View {
     let summary: BudgetUsageSummary
     let budget: DailyBudgetSnapshot

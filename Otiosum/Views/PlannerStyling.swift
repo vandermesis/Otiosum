@@ -56,7 +56,6 @@ struct StatusPill: View {
         case .likelyInProgress: "Likely active"
         case .gentlyLate: "Sliding later"
         case .complete: "Done"
-        case .protectedTime: "Protected"
         case .waiting: "Waiting"
         }
     }

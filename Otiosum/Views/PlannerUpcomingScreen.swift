@@ -11,7 +11,7 @@ struct NextDaysScreen: View {
                 VStack(alignment: .leading, spacing: 16) {
                     Text("Next Days")
                         .font(.system(.largeTitle, design: .rounded, weight: .bold))
-                    Text("Next Days keeps a light forecast of focus blocks, guardrails, and protected energy.")
+                    Text("Next Days keeps a light forecast of focus blocks, routines, and guardrails.")
                         .foregroundStyle(.secondary)
 
                     if calendarService.isLoading {
@@ -66,18 +66,9 @@ private struct NextDaysDayCard: View {
             Divider()
 
             VStack(alignment: .leading, spacing: 8) {
-                Text("Protected & balance")
+                Text("Balance")
                     .font(.subheadline.bold())
                 BudgetSummaryCard(summary: plan.budgetSummary, budget: budget)
-                if plan.protectedBlocks.isEmpty {
-                    Text("No upcoming protected blocks")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                } else {
-                    ForEach(plan.protectedBlocks.prefix(4)) { block in
-                        MiniBlockRow(block: block)
-                    }
-                }
             }
         }
         .padding(16)

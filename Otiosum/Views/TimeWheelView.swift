@@ -765,7 +765,7 @@ private struct TimelineTaskCapsule: View {
                 .strokeBorder(borderColor, lineWidth: isCurrent ? 2 : 1)
         )
         .contentShape(.rect)
-        .gesture(dragGesture)
+        .simultaneousGesture(dragGesture)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("timeline-task-\(block.title.testingIdentifier)")
     }
@@ -888,10 +888,6 @@ private struct TimelineTaskCapsule: View {
     }
 
     private var backgroundColor: Color {
-        if block.isProtected {
-            return tintColor(token: block.tintToken).opacity(0.14)
-        }
-
         if isCurrent {
             return tintColor(token: block.tintToken).opacity(0.12)
         }

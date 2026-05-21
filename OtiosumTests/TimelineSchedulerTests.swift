@@ -73,7 +73,7 @@ struct TimelineSchedulerTests {
         let day = try makeDate(year: 2026, month: 5, day: 21)
         let launchID = UUID()
         let launch = block(id: launchID, title: "Launch", start: day.adding(minutes: 22 * 60), duration: 90)
-        let sleep = block(title: "Sleep", start: day.adding(minutes: 23 * 60), duration: 60, protectedCategory: .sleep)
+        let sleep = block(title: "Sleep", start: day.adding(minutes: 23 * 60), duration: 60, routineRole: .sleep)
         let now = day.adding(minutes: 22 * 60 + 45)
 
         let result = scheduler.schedule(
@@ -149,7 +149,7 @@ struct TimelineSchedulerTests {
         start: Date,
         duration: Int,
         source: PlannerItemSource = .local,
-        protectedCategory: ProtectedCategory? = nil,
+        routineRole: RoutineRole? = nil,
         isCompleted: Bool = false,
         isStarted: Bool = false
     ) -> PlannedBlock {
@@ -166,7 +166,7 @@ struct TimelineSchedulerTests {
             tintToken: "teal",
             notes: "",
             isAllDay: false,
-            protectedCategory: protectedCategory,
+            routineRole: routineRole,
             isCompleted: isCompleted,
             isStarted: isStarted,
             status: isCompleted ? .complete : .upcoming,

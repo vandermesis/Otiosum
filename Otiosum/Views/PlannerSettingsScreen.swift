@@ -14,14 +14,14 @@ struct SettingsScreen: View {
                 Stepper("Add Task default: \(budget.quickAddDefaultDurationMinutes)m", value: $budget.quickAddDefaultDurationMinutes, in: 15...180, step: 5)
             }
 
-            Section("Protected time") {
+            Section("Daily routines") {
                 Stepper("Wake up: \(template.wakeUpMinutes.timeLabel)", value: $template.wakeUpMinutes, in: 300...720, step: 15)
                 Stepper("Sleep starts: \(template.sleepStartMinutes.timeLabel)", value: $template.sleepStartMinutes, in: 1_080...1_410, step: 15)
                 Stepper("Quiet time: \(template.quietStartMinutes.timeLabel)", value: $template.quietStartMinutes, in: 960...1_320, step: 15)
                 Stepper("Recovery block: \(template.quietDurationMinutes)m", value: $template.quietDurationMinutes, in: 30...240, step: 15)
                 Stepper("Lunch starts: \(template.lunchMinutes.timeLabel)", value: $template.lunchMinutes, in: 660...900, step: 15)
                 Stepper("Dinner starts: \(template.dinnerMinutes.timeLabel)", value: $template.dinnerMinutes, in: 960...1_260, step: 15)
-                Toggle("Protect workout time", isOn: $template.includeWorkout)
+                Toggle("Schedule workout", isOn: $template.includeWorkout)
                 if template.includeWorkout {
                     Stepper("Workout starts: \(template.workoutMinutes.timeLabel)", value: $template.workoutMinutes, in: 360...1_260, step: 15)
                 }

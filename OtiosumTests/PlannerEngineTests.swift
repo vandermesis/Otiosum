@@ -29,7 +29,7 @@ struct PlannerEngineTests {
                 preferredTimeWindow: .morning,
                 flexibility: .flexible,
                 calendarEventID: nil,
-                protectedCategory: nil,
+                routineRole: nil,
                 notes: "",
                 isCompleted: false,
                 orderHint: 1,
@@ -49,7 +49,7 @@ struct PlannerEngineTests {
                 preferredTimeWindow: .morning,
                 flexibility: .flexible,
                 calendarEventID: nil,
-                protectedCategory: nil,
+                routineRole: nil,
                 notes: "",
                 isCompleted: false,
                 orderHint: 2,
@@ -68,8 +68,7 @@ struct PlannerEngineTests {
             context: InferenceContext(now: day.adding(minutes: 8 * 60), isSceneActive: true, lastUserInteraction: day.adding(minutes: 8 * 60))
         )
 
-        let nonProtectedBlocks = plan.allBlocks.filter { $0.isProtected == false }
-        for pair in zip(nonProtectedBlocks, nonProtectedBlocks.dropFirst()) {
+        for pair in zip(plan.allBlocks, plan.allBlocks.dropFirst()) {
             #expect(pair.0.end <= pair.1.start)
         }
     }
@@ -94,7 +93,7 @@ struct PlannerEngineTests {
                 preferredTimeWindow: .morning,
                 flexibility: .flexible,
                 calendarEventID: nil,
-                protectedCategory: nil,
+                routineRole: nil,
                 notes: "",
                 isCompleted: false,
                 orderHint: 1,
@@ -114,7 +113,7 @@ struct PlannerEngineTests {
                 preferredTimeWindow: .morning,
                 flexibility: .flexible,
                 calendarEventID: nil,
-                protectedCategory: nil,
+                routineRole: nil,
                 notes: "",
                 isCompleted: false,
                 orderHint: 2,
@@ -183,7 +182,7 @@ struct PlannerEngineTests {
                 preferredTimeWindow: .morning,
                 flexibility: .flexible,
                 calendarEventID: nil,
-                protectedCategory: nil,
+                routineRole: nil,
                 notes: "",
                 isCompleted: false,
                 orderHint: 1,
@@ -203,7 +202,7 @@ struct PlannerEngineTests {
                 preferredTimeWindow: .afternoon,
                 flexibility: .flexible,
                 calendarEventID: nil,
-                protectedCategory: nil,
+                routineRole: nil,
                 notes: "",
                 isCompleted: false,
                 orderHint: 2,
@@ -250,7 +249,7 @@ struct PlannerEngineTests {
             preferredTimeWindow: .evening,
             flexibility: .flexible,
             calendarEventID: nil,
-            protectedCategory: nil,
+            routineRole: nil,
             notes: "",
             isCompleted: false,
             orderHint: 1,
@@ -287,7 +286,7 @@ struct PlannerEngineTests {
         )
 
         let launchBlock = try #require(plan.allBlocks.first(where: { $0.itemID == launchItemID }))
-        let workoutBlock = try #require(plan.allBlocks.first(where: { $0.protectedCategory == .workout }))
+        let workoutBlock = try #require(plan.allBlocks.first(where: { $0.routineRole == .workout }))
         #expect(launchBlock.start >= day.adding(minutes: 18 * 60 + 5))
         #expect(workoutBlock.start >= launchBlock.end)
     }
@@ -308,7 +307,7 @@ struct PlannerEngineTests {
             preferredTimeWindow: .night,
             flexibility: .flexible,
             calendarEventID: nil,
-            protectedCategory: nil,
+            routineRole: nil,
             notes: "",
             isCompleted: false,
             orderHint: 1,
@@ -347,7 +346,7 @@ struct PlannerEngineTests {
             preferredTimeWindow: .night,
             flexibility: .flexible,
             calendarEventID: nil,
-            protectedCategory: nil,
+            routineRole: nil,
             notes: "",
             isCompleted: false,
             orderHint: 1,
@@ -409,7 +408,7 @@ struct PlannerEngineTests {
             preferredTimeWindow: .afternoon,
             flexibility: .flexible,
             calendarEventID: nil,
-            protectedCategory: nil,
+            routineRole: nil,
             notes: "",
             isCompleted: false,
             orderHint: 1,
@@ -430,12 +429,11 @@ struct PlannerEngineTests {
         let lunchBlock = try #require(plan.allBlocks.first(where: { $0.title == "Lunch" }))
         let localBlock = try #require(plan.allBlocks.first(where: { $0.itemID == overlappingItem.id }))
 
-        #expect(lunchBlock.isProtected == false)
         #expect(localBlock.start >= lunchBlock.end)
     }
 
-    @Test("Local protected category blocks move with time like other local tasks")
-    func localProtectedCategoryBlocksArePushedByTime() throws {
+    @Test("Local routine role blocks move with time like other local tasks")
+    func localRoutineRoleBlocksArePushedByTime() throws {
         let day = try makeDate(year: 2026, month: 4, day: 22, hour: 0, minute: 0)
         let restItemID = UUID()
         let followUpItemID = UUID()
@@ -452,7 +450,7 @@ struct PlannerEngineTests {
             preferredTimeWindow: .morning,
             flexibility: .flexible,
             calendarEventID: nil,
-            protectedCategory: .rest,
+            routineRole: .rest,
             notes: "",
             isCompleted: false,
             orderHint: 1,
@@ -472,7 +470,7 @@ struct PlannerEngineTests {
             preferredTimeWindow: .morning,
             flexibility: .flexible,
             calendarEventID: nil,
-            protectedCategory: nil,
+            routineRole: nil,
             notes: "",
             isCompleted: false,
             orderHint: 2,
@@ -497,13 +495,12 @@ struct PlannerEngineTests {
         let restBlock = try #require(plan.allBlocks.first(where: { $0.itemID == restItemID }))
         let followUpBlock = try #require(plan.allBlocks.first(where: { $0.itemID == followUpItemID }))
 
-        #expect(restBlock.isProtected == false)
         #expect(restBlock.end > day.adding(minutes: 9 * 60 + 30))
         #expect(followUpBlock.start >= restBlock.end)
     }
 
-    @Test("Local protected template override replaces matching template block")
-    func localProtectedTemplateOverrideReplacesMatchingTemplateBlock() throws {
+    @Test("Local template override replaces matching template block")
+    func localTemplateOverrideReplacesMatchingTemplateBlock() throws {
         let day = try makeDate(year: 2026, month: 4, day: 22, hour: 0, minute: 0)
         let breakfastID = UUID()
         let breakfast = EventSnapshot(
@@ -519,7 +516,7 @@ struct PlannerEngineTests {
             preferredTimeWindow: .morning,
             flexibility: .flexible,
             calendarEventID: nil,
-            protectedCategory: .meal,
+            routineRole: .meal,
             notes: "",
             isCompleted: false,
             orderHint: 1,
@@ -548,8 +545,8 @@ struct PlannerEngineTests {
         #expect(breakfastBlock.source == .local)
     }
 
-    @Test("Local protected template override keeps its template position")
-    func localProtectedTemplateOverrideKeepsTemplatePosition() throws {
+    @Test("Local template override keeps its template position")
+    func localTemplateOverrideKeepsTemplatePosition() throws {
         let day = try makeDate(year: 2026, month: 4, day: 22, hour: 0, minute: 0)
         let lunchID = UUID()
         let workID = UUID()
@@ -566,7 +563,7 @@ struct PlannerEngineTests {
             preferredTimeWindow: .afternoon,
             flexibility: .flexible,
             calendarEventID: nil,
-            protectedCategory: .meal,
+            routineRole: .meal,
             notes: "",
             isCompleted: false,
             orderHint: 2,
@@ -586,7 +583,7 @@ struct PlannerEngineTests {
             preferredTimeWindow: .afternoon,
             flexibility: .flexible,
             calendarEventID: nil,
-            protectedCategory: nil,
+            routineRole: nil,
             notes: "",
             isCompleted: false,
             orderHint: 1,

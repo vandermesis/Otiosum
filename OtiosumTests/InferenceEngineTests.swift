@@ -31,7 +31,7 @@ struct InferenceEngineTests {
             start: now.addingTimeInterval(-600),
             end: now.addingTimeInterval(600),
             source: .template,
-            protectedCategory: .rest
+            routineRole: .rest
         )
 
         let assessment = engine.assess(
@@ -43,13 +43,13 @@ struct InferenceEngineTests {
         #expect(assessment.status == .likelyInProgress)
     }
 
-    @Test("Local protected category blocks are assessed like editable work")
-    func localProtectedCategoryAssessment() {
+    @Test("Local routine role blocks are assessed like editable work")
+    func localRoutineRoleAssessment() {
         let now = Date(timeIntervalSinceReferenceDate: 2_400)
         let block = makeBlock(
             start: now.addingTimeInterval(-300),
             end: now.addingTimeInterval(600),
-            protectedCategory: .rest
+            routineRole: .rest
         )
 
         let assessment = engine.assess(
@@ -157,7 +157,7 @@ struct InferenceEngineTests {
         end: Date,
         source: PlannerItemSource = .local,
         flexibility: PlannerFlexibility = .flexible,
-        protectedCategory: ProtectedCategory? = nil,
+        routineRole: RoutineRole? = nil,
         isCompleted: Bool = false
     ) -> PlannedBlock {
         PlannedBlock(
@@ -173,7 +173,7 @@ struct InferenceEngineTests {
             tintToken: "mint",
             notes: "",
             isAllDay: false,
-            protectedCategory: protectedCategory,
+            routineRole: routineRole,
             isCompleted: isCompleted,
             status: .upcoming,
             confidence: 0.5
