@@ -180,6 +180,36 @@ final class PlannerStore {
         try? modelContext.save()
     }
 
+    func startProtectedBlockNow(
+        _ block: PlannedBlock,
+        at start: Date = .now,
+        modelContext: ModelContext
+    ) {
+        guard block.source == .template else { return }
+
+        let calendar = Calendar.current
+        let preferredStartMinutes = max(0, min(23 * 60 + 55, start.minutesSinceStartOfDay(using: calendar)))
+        let event = Event(
+            title: block.title,
+            source: .local,
+            suggestedIcon: block.symbolName,
+            tintToken: block.tintToken,
+            targetDurationMinutes: max(15, block.durationMinutes),
+            minimumDurationMinutes: 15,
+            scheduledDay: calendar.startOfDay(for: start),
+            preferredStartMinutes: preferredStartMinutes,
+            preferredTimeWindow: inferredWindow(for: start),
+            flexibility: .flexible,
+            protectedCategory: block.protectedCategory,
+            notes: block.notes,
+            isCompleted: false,
+            isSavedForLater: false
+        )
+
+        modelContext.insert(event)
+        try? modelContext.save()
+    }
+
     func adjustDuration(
         for event: Event,
         by deltaMinutes: Int,

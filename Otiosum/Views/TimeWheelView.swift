@@ -265,7 +265,7 @@ struct TimeWheelView: View {
     }
 
     private func handleQuickAction(for block: PlannedBlock, action: TimelineQuickAction) {
-        guard block.source == .local else { return }
+        guard block.source == .local || (block.source == .template && action == .startNow) else { return }
         onQuickAction?(block, action)
     }
 
@@ -724,7 +724,7 @@ private struct TimelineTaskCapsule: View {
                     TimelineTag(text: "Next", tint: .secondary)
                 }
 
-                if block.source == .local {
+                if block.source == .local || block.source == .template {
                     timelineActionButton
                 } else {
                     Image(systemName: statusSymbol)
@@ -851,7 +851,14 @@ private struct TimelineTaskCapsule: View {
 
     @ViewBuilder
     private var timelineActionButton: some View {
-        if block.isCompleted {
+        if block.source == .template {
+            Button("Start", systemImage: "play.fill") {
+                onQuickAction(.startNow)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .accessibilityIdentifier("timeline-task-start-\(block.title.testingIdentifier)")
+        } else if block.isCompleted {
             Button("Undo", systemImage: "arrow.uturn.backward") {
                 onQuickAction(.markUndone)
             }

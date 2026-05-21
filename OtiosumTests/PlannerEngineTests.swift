@@ -310,6 +310,52 @@ struct PlannerEngineTests {
         #expect(followUpBlock.start >= restBlock.end)
     }
 
+    @Test("Local protected template override replaces matching template block")
+    func localProtectedTemplateOverrideReplacesMatchingTemplateBlock() throws {
+        let day = try makeDate(year: 2026, month: 4, day: 22, hour: 0, minute: 0)
+        let breakfastID = UUID()
+        let breakfast = EventSnapshot(
+            id: breakfastID,
+            title: "Breakfast",
+            source: .local,
+            suggestedIcon: "fork.knife",
+            tintToken: "peach",
+            targetDurationMinutes: 40,
+            minimumDurationMinutes: 15,
+            scheduledDay: day,
+            preferredStartMinutes: 9 * 60,
+            preferredTimeWindow: .morning,
+            flexibility: .flexible,
+            calendarEventID: nil,
+            protectedCategory: .meal,
+            notes: "",
+            isCompleted: false,
+            orderHint: 1,
+            isSavedForLater: false,
+            forceAfterBedtime: false
+        )
+
+        let plan = engine.plan(
+            for: day,
+            localItems: [breakfast],
+            calendarEvents: [],
+            calendarLinks: [],
+            template: .default,
+            budget: .default,
+            context: InferenceContext(
+                now: day.adding(minutes: 8 * 60),
+                isSceneActive: true,
+                lastUserInteraction: nil
+            )
+        )
+
+        let breakfastBlocks = plan.allBlocks.filter { $0.title == "Breakfast" }
+        let breakfastBlock = try #require(breakfastBlocks.first)
+        #expect(breakfastBlocks.count == 1)
+        #expect(breakfastBlock.itemID == breakfastID)
+        #expect(breakfastBlock.source == .local)
+    }
+
     @MainActor
     @Test("Quick capture from Today creates a scheduled 30 minute item")
     func quickCaptureDefaults() throws {

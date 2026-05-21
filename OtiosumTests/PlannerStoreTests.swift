@@ -259,6 +259,45 @@ struct PlannerStoreTests {
         #expect(item.isSavedForLater == false)
     }
 
+    @Test("Starting protected template block creates local protected event")
+    func startProtectedTemplateBlockCreatesLocalEvent() throws {
+        let modelContext = try makeModelContext()
+        let store = PlannerStore()
+        let originalStart = Date(timeIntervalSinceReferenceDate: 150_000)
+        let block = PlannedBlock(
+            id: UUID(),
+            itemID: UUID(),
+            calendarEventID: nil,
+            title: "Breakfast",
+            start: originalStart,
+            end: originalStart.adding(minutes: 40),
+            source: .template,
+            flexibility: .locked,
+            symbolName: "fork.knife",
+            tintToken: "peach",
+            notes: "",
+            isAllDay: false,
+            protectedCategory: .meal,
+            isCompleted: false,
+            status: .protectedTime,
+            confidence: 1
+        )
+        let start = Date(timeIntervalSinceReferenceDate: 160_000)
+
+        store.startProtectedBlockNow(block, at: start, modelContext: modelContext)
+
+        let items = try modelContext.fetch(FetchDescriptor<Event>())
+        let item = try #require(items.first)
+        let calendar = Calendar.current
+        #expect(items.count == 1)
+        #expect(item.title == "Breakfast")
+        #expect(item.source == .local)
+        #expect(item.protectedCategory == .meal)
+        #expect(item.scheduledDay == calendar.startOfDay(for: start))
+        #expect(item.preferredStartMinutes == start.minutesSinceStartOfDay(using: calendar))
+        #expect(item.targetDurationMinutes == 40)
+    }
+
     @Test("Quick add from Today uses provided timeline anchor and configured default duration")
     func captureQuickItemFromTodayUsesAnchorAndDuration() throws {
         let modelContext = try makeModelContext()

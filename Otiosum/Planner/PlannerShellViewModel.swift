@@ -280,9 +280,11 @@ final class PlannerShellViewModel {
         modelContext: ModelContext
     ) {
         registerInteraction()
-        guard block.source == .local, block.isProtected == false else { return }
-        guard let event = itemLookup[block.itemID] else { return }
-        store.startEventNow(event, modelContext: modelContext)
+        if block.source == .template {
+            store.startProtectedBlockNow(block, modelContext: modelContext)
+        } else if block.source == .local, block.isProtected == false, let event = itemLookup[block.itemID] {
+            store.startEventNow(event, modelContext: modelContext)
+        }
     }
 
     func setCompletion(
