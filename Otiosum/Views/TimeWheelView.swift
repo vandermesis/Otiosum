@@ -7,6 +7,8 @@ private enum TimelineLayoutMetrics {
     static let scaleToLaneSpacing: CGFloat = 1
     static let readHeadWidth: CGFloat = 170
     static let readHeadLeadingInset: CGFloat = 4
+    static let gapCardHeight: CGFloat = 62
+    static let gapCardVerticalPadding: CGFloat = 8
 }
 
 struct TimeWheelView: View {
@@ -378,15 +380,18 @@ private struct TimelineCanvasView: View {
         for pair in zip(sortedBlocks, sortedBlocks.dropFirst()) {
             let gapMinutes = Int(pair.1.start.timeIntervalSince(pair.0.end) / 60)
             guard gapMinutes >= 35 else { continue }
-
-            let center = pair.0.end.addingTimeInterval(pair.1.start.timeIntervalSince(pair.0.end) / 2)
+            let gapHeight = CGFloat(gapMinutes) * pointsPerMinute
+            guard gapHeight >= TimelineLayoutMetrics.gapCardHeight + (TimelineLayoutMetrics.gapCardVerticalPadding * 2) else {
+                continue
+            }
 
             if warningIndex < warnings.count {
                 let warning = warnings[warningIndex]
                 warningIndex += 1
                 items.append(
                     TimelineGapItem(
-                        date: center,
+                        start: pair.0.end,
+                        end: pair.1.start,
                         title: warning.message,
                         detail: warning.detail,
                         isWarning: true
@@ -397,7 +402,8 @@ private struct TimelineCanvasView: View {
                 tipIndex += 1
                 items.append(
                     TimelineGapItem(
-                        date: center,
+                        start: pair.0.end,
+                        end: pair.1.start,
                         title: tip,
                         detail: "This open space can lower pressure before the next block.",
                         isWarning: false
@@ -442,7 +448,8 @@ private struct TimelineCanvasView: View {
 
                     ForEach(gapItems) { gap in
                         TimelineGapCard(item: gap, width: laneWidth)
-                            .offset(x: TimelineLayoutMetrics.laneLeadingInset, y: yOffset(for: gap.date))
+                            .frame(height: TimelineLayoutMetrics.gapCardHeight)
+                            .offset(x: TimelineLayoutMetrics.laneLeadingInset, y: gapYOffset(for: gap))
                     }
 
                     ForEach(timedBlocks) { block in
@@ -541,6 +548,14 @@ private struct TimelineCanvasView: View {
         let clampedDate = min(max(date, range.lowerBound), range.upperBound)
         let minutes = clampedDate.timeIntervalSince(range.lowerBound) / 60
         return CGFloat(minutes) * pointsPerMinute
+    }
+
+    private func gapYOffset(for gap: TimelineGapItem) -> CGFloat {
+        let start = yOffset(for: gap.start)
+        let end = yOffset(for: gap.end)
+        let availableHeight = max(end - start, 0)
+        let centeredOffset = max((availableHeight - TimelineLayoutMetrics.gapCardHeight) / 2, 0)
+        return start + centeredOffset
     }
 
     private func date(at location: CGPoint) -> Date {
@@ -1092,7 +1107,8 @@ private struct TimelineDragState {
 }
 private struct TimelineGapItem: Identifiable {
     let id = UUID()
-    let date: Date
+    let start: Date
+    let end: Date
     let title: String
     let detail: String
     let isWarning: Bool
