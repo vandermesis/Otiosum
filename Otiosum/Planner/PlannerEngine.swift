@@ -25,19 +25,27 @@ struct PlannerEngine {
         let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay) ?? startOfDay.adding(minutes: 24 * 60)
         let sleepBoundary = calendar.date(on: day, minutesFromStartOfDay: template.sleepStartMinutes)
 
+        let templateProtectedBlocks = makeProtectedBlocks(
+            for: day,
+            template: template,
+            budget: budget,
+            endOfDay: endOfDay
+        )
         let protectedTemplateOverrides = localItems.filter { item in
             guard let scheduledDay = item.scheduledDay else { return false }
             return item.source == .local
                 && item.protectedCategory != nil
                 && item.isSavedForLater == false
                 && calendar.isDate(scheduledDay, inSameDayAs: day)
+                && templateProtectedBlocks.contains { block in
+                    block.title == item.title && block.protectedCategory == item.protectedCategory
+                }
         }
-        let protectedBlocks = makeProtectedBlocks(
-            for: day,
-            template: template,
-            budget: budget,
-            endOfDay: endOfDay
-        )
+        let protectedTemplateOverrideIDs = Set(protectedTemplateOverrides.map(\.id))
+        let localProtectedOverrideBlocks = protectedTemplateOverrides.map {
+            makeLocalProtectedOverrideBlock(item: $0, day: day, endOfDay: endOfDay)
+        }
+        let protectedBlocks = templateProtectedBlocks
         .filter { block in
             protectedTemplateOverrides.contains { override in
                 override.title == block.title && override.protectedCategory == block.protectedCategory
@@ -55,13 +63,15 @@ struct PlannerEngine {
         let allDayCalendarBlocks = calendarBlocks.filter(\.isAllDay)
         let timedCalendarBlocks = calendarBlocks.filter { !$0.isAllDay }
 
-        var allBlocks = (protectedBlocks + timedCalendarBlocks).sorted(by: blockSort)
+        var allBlocks = (protectedBlocks + timedCalendarBlocks + localProtectedOverrideBlocks).sorted(by: blockSort)
         var tooMuchTodayIssues: [TooMuchTodayIssue] = []
 
         let scheduledItems = localItems
             .filter { item in
                 guard let scheduledDay = item.scheduledDay else { return false }
-                return calendar.isDate(scheduledDay, inSameDayAs: day) && item.isSavedForLater == false
+                return calendar.isDate(scheduledDay, inSameDayAs: day)
+                    && item.isSavedForLater == false
+                    && protectedTemplateOverrideIDs.contains(item.id) == false
             }
             .sorted(by: localItemSort)
 
@@ -203,6 +213,36 @@ struct PlannerEngine {
                 displacedCategory: nil,
                 suggestedDate: calendar.date(byAdding: .day, value: 1, to: day) ?? day
             )
+        )
+    }
+
+    private func makeLocalProtectedOverrideBlock(
+        item: EventSnapshot,
+        day: Date,
+        endOfDay: Date
+    ) -> PlannedBlock {
+        let startMinutes = item.preferredStartMinutes ?? item.preferredTimeWindow.startMinutes
+        let duration = max(item.targetDurationMinutes, item.minimumDurationMinutes)
+        let start = calendar.date(on: day, minutesFromStartOfDay: startMinutes)
+        let end = min(start.adding(minutes: duration), endOfDay)
+
+        return PlannedBlock(
+            id: item.id,
+            itemID: item.id,
+            calendarEventID: item.calendarEventID,
+            title: item.title,
+            start: start,
+            end: end,
+            source: item.source,
+            flexibility: item.flexibility,
+            symbolName: item.suggestedIcon,
+            tintToken: item.tintToken,
+            notes: item.notes,
+            isAllDay: false,
+            protectedCategory: item.protectedCategory,
+            isCompleted: item.isCompleted,
+            status: item.isCompleted ? .complete : .upcoming,
+            confidence: item.isCompleted ? 1 : 0.7
         )
     }
 

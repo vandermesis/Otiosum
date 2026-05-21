@@ -356,6 +356,73 @@ struct PlannerEngineTests {
         #expect(breakfastBlock.source == .local)
     }
 
+    @Test("Local protected template override keeps its template position")
+    func localProtectedTemplateOverrideKeepsTemplatePosition() throws {
+        let day = try makeDate(year: 2026, month: 4, day: 22, hour: 0, minute: 0)
+        let lunchID = UUID()
+        let workID = UUID()
+        let lunch = EventSnapshot(
+            id: lunchID,
+            title: "Lunch",
+            source: .local,
+            suggestedIcon: "fork.knife",
+            tintToken: "peach",
+            targetDurationMinutes: 40,
+            minimumDurationMinutes: 15,
+            scheduledDay: day,
+            preferredStartMinutes: DayTemplateSnapshot.default.lunchMinutes,
+            preferredTimeWindow: .afternoon,
+            flexibility: .flexible,
+            calendarEventID: nil,
+            protectedCategory: .meal,
+            notes: "",
+            isCompleted: false,
+            orderHint: 2,
+            isSavedForLater: false,
+            forceAfterBedtime: false
+        )
+        let work = EventSnapshot(
+            id: workID,
+            title: "Inbox",
+            source: .local,
+            suggestedIcon: "tray.full",
+            tintToken: "mint",
+            targetDurationMinutes: 30,
+            minimumDurationMinutes: 15,
+            scheduledDay: day,
+            preferredStartMinutes: DayTemplateSnapshot.default.lunchMinutes,
+            preferredTimeWindow: .afternoon,
+            flexibility: .flexible,
+            calendarEventID: nil,
+            protectedCategory: nil,
+            notes: "",
+            isCompleted: false,
+            orderHint: 1,
+            isSavedForLater: false,
+            forceAfterBedtime: false
+        )
+
+        let plan = engine.plan(
+            for: day,
+            localItems: [work, lunch],
+            calendarEvents: [],
+            calendarLinks: [],
+            template: .default,
+            budget: .default,
+            context: InferenceContext(
+                now: day.adding(minutes: 8 * 60),
+                isSceneActive: true,
+                lastUserInteraction: nil
+            )
+        )
+
+        let lunchBlock = try #require(plan.allBlocks.first(where: { $0.itemID == lunchID }))
+        let workBlock = try #require(plan.allBlocks.first(where: { $0.itemID == workID }))
+        let expectedLunchStart = day.adding(minutes: DayTemplateSnapshot.default.lunchMinutes)
+        #expect(lunchBlock.start == expectedLunchStart)
+        #expect(workBlock.start >= lunchBlock.end)
+    }
+
     @MainActor
     @Test("Quick capture from Today creates a scheduled 30 minute item")
     func quickCaptureDefaults() throws {

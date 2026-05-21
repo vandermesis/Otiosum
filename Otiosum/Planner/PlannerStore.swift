@@ -182,13 +182,14 @@ final class PlannerStore {
 
     func startProtectedBlockNow(
         _ block: PlannedBlock,
-        at start: Date = .now,
+        at start: Date? = nil,
         modelContext: ModelContext
     ) {
         guard block.source == .template else { return }
 
         let calendar = Calendar.current
-        let preferredStartMinutes = max(0, min(23 * 60 + 55, start.minutesSinceStartOfDay(using: calendar)))
+        let resolvedStart = start ?? block.start
+        let preferredStartMinutes = max(0, min(23 * 60 + 55, resolvedStart.minutesSinceStartOfDay(using: calendar)))
         let event = Event(
             title: block.title,
             source: .local,
@@ -196,9 +197,9 @@ final class PlannerStore {
             tintToken: block.tintToken,
             targetDurationMinutes: max(15, block.durationMinutes),
             minimumDurationMinutes: 15,
-            scheduledDay: calendar.startOfDay(for: start),
+            scheduledDay: calendar.startOfDay(for: resolvedStart),
             preferredStartMinutes: preferredStartMinutes,
-            preferredTimeWindow: inferredWindow(for: start),
+            preferredTimeWindow: inferredWindow(for: resolvedStart),
             flexibility: .flexible,
             protectedCategory: block.protectedCategory,
             notes: block.notes,

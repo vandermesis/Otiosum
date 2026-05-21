@@ -298,6 +298,43 @@ struct PlannerStoreTests {
         #expect(item.targetDurationMinutes == 40)
     }
 
+    @Test("Starting protected template block keeps its timeline position")
+    func startProtectedTemplateBlockKeepsTimelinePosition() throws {
+        let modelContext = try makeModelContext()
+        let store = PlannerStore()
+        let calendar = Calendar.current
+        let blockStart = calendar.date(
+            bySettingHour: 12,
+            minute: 30,
+            second: 0,
+            of: Date(timeIntervalSinceReferenceDate: 170_000)
+        ) ?? Date(timeIntervalSinceReferenceDate: 170_000)
+        let block = PlannedBlock(
+            id: UUID(),
+            itemID: UUID(),
+            calendarEventID: nil,
+            title: "Lunch",
+            start: blockStart,
+            end: blockStart.adding(minutes: 40),
+            source: .template,
+            flexibility: .locked,
+            symbolName: "fork.knife",
+            tintToken: "peach",
+            notes: "",
+            isAllDay: false,
+            protectedCategory: .meal,
+            isCompleted: false,
+            status: .protectedTime,
+            confidence: 1
+        )
+
+        store.startProtectedBlockNow(block, modelContext: modelContext)
+
+        let item = try #require(try modelContext.fetch(FetchDescriptor<Event>()).first)
+        #expect(item.scheduledDay == calendar.startOfDay(for: blockStart))
+        #expect(item.preferredStartMinutes == blockStart.minutesSinceStartOfDay(using: calendar))
+    }
+
     @Test("Quick add from Today uses provided timeline anchor and configured default duration")
     func captureQuickItemFromTodayUsesAnchorAndDuration() throws {
         let modelContext = try makeModelContext()
