@@ -762,7 +762,7 @@ private struct TimelineTaskCapsule: View {
                 .strokeBorder(borderColor, lineWidth: isCurrent ? 2 : 1)
         )
         .contentShape(.rect)
-        .highPriorityGesture(dragGesture)
+        .gesture(dragGesture)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("timeline-task-\(block.title.testingIdentifier)")
     }
@@ -785,7 +785,7 @@ private struct TimelineTaskCapsule: View {
         DragGesture(minimumDistance: 2)
             .onChanged { value in
                 guard draggable else { return }
-                let rawDelta = Int((-value.translation.height / pointsPerMinute).rounded())
+                let rawDelta = Int((value.translation.height / pointsPerMinute).rounded())
                 resizeDeltaMinutes = nearestStep(rawDelta, step: 5)
             }
             .onEnded { _ in
