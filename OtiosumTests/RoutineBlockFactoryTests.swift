@@ -56,6 +56,44 @@ struct RoutineBlockFactoryTests {
         #expect(blocks.contains { $0.routineRole == .workout } == false)
     }
 
+    @Test("Routine factory omits zero-duration routine blocks")
+    func omitsZeroDurationRoutineBlocks() throws {
+        let day = try makeDate(year: 2026, month: 5, day: 22)
+        let template = DayTemplateSnapshot(
+            wakeUpMinutes: 0,
+            sleepStartMinutes: 24 * 60,
+            breakfastMinutes: 8 * 60,
+            lunchMinutes: 12 * 60,
+            dinnerMinutes: 18 * 60,
+            quietStartMinutes: 20 * 60,
+            quietDurationMinutes: 0,
+            workoutMinutes: 7 * 60,
+            workoutDurationMinutes: 0,
+            includeWorkout: true,
+            transitionBufferMinutes: 0
+        )
+        let budget = DailyBudgetSnapshot(
+            minimumSleepHours: 0,
+            minimumRestMinutes: 0,
+            targetWorkMinutes: 0,
+            maxFocusItems: 0,
+            mealDurationMinutes: 0,
+            workoutTargetMinutes: 0,
+            quickAddDefaultDurationMinutes: 30,
+            lowNotificationMode: true,
+            useSimplifiedMode: false
+        )
+
+        let blocks = factory.makeBlocks(
+            for: day,
+            template: template,
+            budget: budget,
+            endOfDay: day.adding(minutes: 24 * 60)
+        )
+
+        #expect(blocks.isEmpty)
+    }
+
     private func makeDate(year: Int, month: Int, day: Int) throws -> Date {
         try #require(
             Self.calendar.date(

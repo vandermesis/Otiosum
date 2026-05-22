@@ -230,7 +230,11 @@ enum AppConfiguration {
     ) throws {
         template.wakeUpMinutes = 0
         template.sleepStartMinutes = 24 * 60
+        template.breakfastMinutes = 8 * 60
+        template.lunchMinutes = 12 * 60
+        template.dinnerMinutes = 18 * 60
         template.quietDurationMinutes = 0
+        template.workoutDurationMinutes = 0
         template.includeWorkout = false
         template.transitionBufferMinutes = 0
 
@@ -255,6 +259,7 @@ enum AppConfiguration {
                 preferredStartMinutes: startMinutes,
                 preferredTimeWindow: .anytime,
                 flexibility: .flexible,
+                isStarted: true,
                 orderHint: -1,
                 isSavedForLater: false,
                 forceAfterBedtime: true

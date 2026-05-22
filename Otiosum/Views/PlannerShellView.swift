@@ -84,7 +84,10 @@ struct PlannerShellView: View {
                     TodayScreen(
                         day: selectedDayBinding,
                         plan: selectedDayPlan,
-                        timelineTitleDate: timelineCenterDate,
+                        timelineTitleDate: viewModel.timelineTitleDate(
+                            selectedDay: viewModel.selectedDay,
+                            timelineCenterDate: timelineCenterDate
+                        ),
                         timelineBlocks: timelineBlocks,
                         budget: budgetSnapshot,
                         calendarService: viewModel.calendarService,
@@ -153,6 +156,7 @@ struct PlannerShellView: View {
                             }
                         },
                         onCenterDateChanged: { centerDate in
+                            guard timelineCenterDate != centerDate else { return }
                             timelineCenterDate = centerDate
                         }
                     )

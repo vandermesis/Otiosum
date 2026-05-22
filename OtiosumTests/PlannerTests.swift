@@ -236,6 +236,38 @@ struct PlannerTests {
         #expect(plans.first?.0 == calendar.date(byAdding: .day, value: -3, to: centerDate))
         #expect(plans.last?.0 == calendar.date(byAdding: .day, value: 3, to: centerDate))
     }
+
+    @Test("Shell timeline title date follows scroll center day")
+    func testShellTimelineTitleDateUsesScrollCenterDay() async throws {
+        let shellViewModel = PlannerShellViewModel()
+        let calendar = Calendar.current
+        let selectedDay = date(year: 2026, month: 5, day: 22).adding(minutes: 9 * 60)
+        let previousScrollCenter = date(year: 2026, month: 5, day: 21).adding(minutes: 23 * 60)
+        let nextScrollCenter = date(year: 2026, month: 5, day: 23).adding(minutes: 8 * 60)
+        let nextSelectedDay = date(year: 2026, month: 5, day: 23).adding(minutes: 8 * 60)
+
+        #expect(
+            shellViewModel.timelineTitleDate(
+                selectedDay: selectedDay,
+                timelineCenterDate: previousScrollCenter,
+                calendar: calendar
+            ) == calendar.startOfDay(for: previousScrollCenter)
+        )
+        #expect(
+            shellViewModel.timelineTitleDate(
+                selectedDay: selectedDay,
+                timelineCenterDate: nextScrollCenter,
+                calendar: calendar
+            ) == calendar.startOfDay(for: nextScrollCenter)
+        )
+        #expect(
+            shellViewModel.timelineTitleDate(
+                selectedDay: nextSelectedDay,
+                timelineCenterDate: nextScrollCenter,
+                calendar: calendar
+            ) == calendar.startOfDay(for: nextSelectedDay)
+        )
+    }
     
     // MARK: - Type & Utility Tests
     

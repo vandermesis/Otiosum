@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 private enum TimelineLayoutMetrics {
     static let labelColumnWidth: CGFloat = 54
@@ -9,6 +10,29 @@ private enum TimelineLayoutMetrics {
     static let readHeadLeadingInset: CGFloat = 4
     static let gapCardHeight: CGFloat = 62
     static let gapCardVerticalPadding: CGFloat = 8
+}
+
+private struct TimelineViewportContentKey: Equatable {
+    let rangeLowerBound: Date
+    let rangeUpperBound: Date
+    let now: Date
+    let blockStates: [TimelineViewportBlockState]
+    let dragBlockID: UUID?
+    let laneWidth: CGFloat
+}
+
+private struct TimelineViewportBlockState: Equatable {
+    let id: UUID
+    let title: String
+    let start: Date
+    let end: Date
+    let isCompleted: Bool
+    let isStarted: Bool
+}
+
+private struct TimelineJumpRequest: Equatable {
+    let id: Int
+    let date: Date
 }
 
 struct TimeWheelView: View {
@@ -26,15 +50,22 @@ struct TimeWheelView: View {
     let onQuickAction: ((PlannedBlock, TimelineQuickAction) -> Void)?
     let onCenterDateChanged: ((Date) -> Void)?
 
-    @State private var scrollAnchorDate: Date?
+    @State private var currentCenterDate: Date?
+    @State private var rangeReferenceDate: Date?
+    @State private var lastReportedCenterDate: Date?
+    @State private var pendingNowJumpRequest: TimelineJumpRequest?
+    @State private var nextJumpRequestID = 0
     @State private var dragState: TimelineDragState?
     @State private var snapFeedbackToken = 0
     @State private var invalidDropFeedbackToken = 0
     @State private var invalidDropMessage: String?
 
     private let calendar = Calendar.current
+    private let scrollCoordinator = TimelineScrollCoordinator()
     private let slotMinutes = 5
+    private let centerReportMinutes = 30
     private let pointsPerMinute: CGFloat = 2.2
+    private let headerHeight: CGFloat = 52
     // Keep the timeline window finite so SwiftUI doesn't build hundreds of thousands of rows.
     private let visibleDayRange: Int = 3
 
@@ -67,53 +98,88 @@ struct TimeWheelView: View {
     var body: some View {
         TimelineView(.periodic(from: .now, by: 30)) { context in
             let now = context.date
-            let range = timelineRange(reference: scrollAnchorDate ?? day)
+            let rangeReference = rangeReferenceDate ?? day
+            let range = scrollCoordinator.timelineRange(reference: rangeReference, visibleDayRange: visibleDayRange)
 
             GeometryReader { proxy in
                 let laneWidth = max(
                     proxy.size.width - TimelineLayoutMetrics.laneLeadingInset - TimelineLayoutMetrics.laneTrailingInset,
                     180
                 )
+                let roundedNow = roundedDate(now, stepMinutes: slotMinutes)
+                let contentKey = TimelineViewportContentKey(
+                    rangeLowerBound: range.lowerBound,
+                    rangeUpperBound: range.upperBound,
+                    now: roundedNow,
+                    blockStates: visibleBlocks(in: range).map { block in
+                        TimelineViewportBlockState(
+                            id: block.id,
+                            title: block.title,
+                            start: block.start,
+                            end: block.end,
+                            isCompleted: block.isCompleted,
+                            isStarted: block.isStarted
+                        )
+                    },
+                    dragBlockID: dragState?.blockID,
+                    laneWidth: laneWidth
+                )
 
                 ZStack(alignment: .bottomTrailing) {
-                    ScrollView(.vertical) {
-                        TimelineCanvasView(
-                            range: range,
-                            now: now,
-                            blocks: visibleBlocks(in: range),
-                            slotMinutes: slotMinutes,
-                            pointsPerMinute: pointsPerMinute,
-                            laneWidth: laneWidth,
-                            warnings: warnings,
-                            currentBlockID: currentBlockID,
-                            nextBlockID: nextBlockID,
-                            showsHeader: showsHeader,
-                            calendar: calendar,
-                            dragState: dragState,
-                            onDropLaterItem: { itemID, date in
-                                let didHandle = onDropLaterItem?(itemID, roundedDate(date, stepMinutes: slotMinutes)) ?? false
-                                if didHandle == false {
-                                    showInvalidDropMessage("Couldn’t place this Later item.")
+                    TimelineScrollViewport(
+                        range: range,
+                        scrollCoordinator: scrollCoordinator,
+                        pointsPerMinute: pointsPerMinute,
+                        headerHeight: showsHeader ? headerHeight : 0,
+                        centerStepMinutes: slotMinutes,
+                        centerDate: currentCenterDate ?? roundedNow,
+                        pendingJumpRequest: pendingNowJumpRequest,
+                        contentKey: contentKey,
+                        onCenterDateChanged: { centerDate in
+                            currentCenterDate = roundedDate(centerDate, stepMinutes: slotMinutes)
+                        },
+                        onDisplayDayChanged: { visibleDay in
+                            handleVisibleDayChanged(visibleDay, currentRangeReference: rangeReference)
+                        },
+                        onPendingJumpHandled: {
+                            pendingNowJumpRequest = nil
+                        },
+                        content: {
+                            TimelineCanvasView(
+                                range: range,
+                                now: now,
+                                blocks: visibleBlocks(in: range),
+                                slotMinutes: slotMinutes,
+                                pointsPerMinute: pointsPerMinute,
+                                laneWidth: laneWidth,
+                                warnings: warnings,
+                                currentBlockID: currentBlockID,
+                                nextBlockID: nextBlockID,
+                                showsHeader: showsHeader,
+                                calendar: calendar,
+                                dragState: dragState,
+                                onDropLaterItem: { itemID, date in
+                                    let didHandle = onDropLaterItem?(itemID, roundedDate(date, stepMinutes: slotMinutes)) ?? false
+                                    if didHandle == false {
+                                        showInvalidDropMessage("Couldn’t place this Later item.")
+                                    }
+                                    return didHandle
+                                },
+                                onDragChanged: { block, proposedStart in
+                                    handleDragChanged(for: block, proposedStart: proposedStart, in: range)
+                                },
+                                onDragEnded: { block in
+                                    handleDragEnded(for: block)
+                                },
+                                onAdjustDuration: { block, deltaMinutes in
+                                    handleAdjustDuration(for: block, deltaMinutes: deltaMinutes)
+                                },
+                                onQuickAction: { block, action in
+                                    handleQuickAction(for: block, action: action)
                                 }
-                                return didHandle
-                            },
-                            onDragChanged: { block, proposedStart in
-                                handleDragChanged(for: block, proposedStart: proposedStart, in: range)
-                            },
-                            onDragEnded: { block in
-                                handleDragEnded(for: block)
-                            },
-                            onAdjustDuration: { block, deltaMinutes in
-                                handleAdjustDuration(for: block, deltaMinutes: deltaMinutes)
-                            },
-                            onQuickAction: { block, action in
-                                handleQuickAction(for: block, action: action)
-                            }
-                        )
-                    }
-                    .scrollIndicators(.hidden)
-                    .defaultScrollAnchor(.center)
-                    .scrollPosition(id: $scrollAnchorDate, anchor: .center)
+                            )
+                        }
+                    )
                     .background(PlannerBackground(simple: false))
 
                     if let invalidDropMessage {
@@ -123,18 +189,17 @@ struct TimeWheelView: View {
                             .padding(.horizontal, 12)
                             .transition(.move(edge: .top).combined(with: .opacity))
                     }
-
                 }
                 .overlay(alignment: .center) {
                     TimelineCenterNowLine(
-                        date: scrollAnchorDate ?? now
+                        date: currentCenterDate ?? now
                     )
                     .allowsHitTesting(false)
                 }
                 .overlay(alignment: .trailing) {
                     if shouldShowBackToNow(for: now) {
                         Button("Back to Now", systemImage: "arrow.clockwise") {
-                            jumpToNow(using: now)
+                            requestJumpToNow(using: now)
                         }
                         .buttonStyle(.borderedProminent)
                         .controlSize(.small)
@@ -143,29 +208,19 @@ struct TimeWheelView: View {
                     }
                 }
                 .onAppear {
-                    jumpToNow(using: now)
-                    onCenterDateChanged?(roundedDate(now, stepMinutes: slotMinutes))
+                    requestJumpToNow(using: now)
                 }
                 .onChange(of: day) { _, _ in
                     dragState = nil
-                    jumpToNow(using: now)
-                }
-                .onChange(of: scrollAnchorDate) { _, newValue in
-                    if let newValue {
-                        onCenterDateChanged?(newValue)
-                    }
+                    currentCenterDate = nil
+                    rangeReferenceDate = day
+                    lastReportedCenterDate = nil
+                    requestJumpToNow(using: now)
                 }
             }
         }
         .sensoryFeedback(.selection, trigger: snapFeedbackToken)
         .sensoryFeedback(.error, trigger: invalidDropFeedbackToken)
-    }
-
-    private func timelineRange(reference: Date) -> ClosedRange<Date> {
-        let referenceDayStart = calendar.startOfDay(for: reference)
-        let start = calendar.date(byAdding: .day, value: -visibleDayRange, to: referenceDayStart) ?? referenceDayStart
-        let end = calendar.date(byAdding: .day, value: visibleDayRange + 1, to: referenceDayStart) ?? referenceDayStart
-        return start...end
     }
 
     private func visibleBlocks(in range: ClosedRange<Date>) -> [PlannedBlock] {
@@ -191,20 +246,43 @@ struct TimeWheelView: View {
     }
 
     private func shouldShowBackToNow(for now: Date) -> Bool {
-        guard let anchor = scrollAnchorDate else { return false }
+        guard let anchor = currentCenterDate else { return false }
         return abs(anchor.timeIntervalSince(roundedDate(now, stepMinutes: slotMinutes))) > (20 * 60)
     }
 
-    private func jumpToNow(using now: Date) {
+    private func requestJumpToNow(using now: Date) {
         let target = roundedDate(now, stepMinutes: slotMinutes)
+        rangeReferenceDate = target
+        currentCenterDate = target
+        reportCenterDateIfNeeded(target)
+        nextJumpRequestID += 1
+        pendingNowJumpRequest = TimelineJumpRequest(id: nextJumpRequestID, date: target)
+    }
 
-        if reduceMotion {
-            scrollAnchorDate = target
-        } else {
-            withAnimation(.easeInOut(duration: 0.25)) {
-                scrollAnchorDate = target
-            }
+    private func handleVisibleDayChanged(_ visibleDay: Date, currentRangeReference: Date) {
+        let displayDay = scrollCoordinator.displayDay(for: visibleDay)
+
+        if scrollCoordinator.shouldRecenterRange(
+            currentReference: currentRangeReference,
+            candidateCenter: displayDay,
+            visibleDayRange: visibleDayRange
+        ) {
+            rangeReferenceDate = displayDay
         }
+
+        reportCenterDateIfNeeded(displayDay)
+    }
+
+    private func reportCenterDateIfNeeded(_ centerDate: Date) {
+        guard scrollCoordinator.shouldReportCenterDate(
+            lastReported: lastReportedCenterDate,
+            candidateCenter: centerDate,
+            stepMinutes: centerReportMinutes
+        ) else { return }
+
+        let reportDate = scrollCoordinator.reportDate(for: centerDate, stepMinutes: centerReportMinutes)
+        lastReportedCenterDate = reportDate
+        onCenterDateChanged?(reportDate)
     }
 
     private func handleDragChanged(
@@ -322,6 +400,243 @@ struct TimeWheelView: View {
 
 }
 
+private struct TimelineScrollViewport<Content: View>: UIViewControllerRepresentable {
+    let range: ClosedRange<Date>
+    let scrollCoordinator: TimelineScrollCoordinator
+    let pointsPerMinute: CGFloat
+    let headerHeight: CGFloat
+    let centerStepMinutes: Int
+    let centerDate: Date
+    let pendingJumpRequest: TimelineJumpRequest?
+    let contentKey: TimelineViewportContentKey
+    let onCenterDateChanged: (Date) -> Void
+    let onDisplayDayChanged: (Date) -> Void
+    let onPendingJumpHandled: () -> Void
+    @ViewBuilder let content: () -> Content
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(parent: self)
+    }
+
+    func makeUIViewController(context: Context) -> TimelineScrollHostingController<Content> {
+        let controller = TimelineScrollHostingController(rootView: content())
+        controller.scrollView.delegate = context.coordinator
+        controller.scrollView.showsVerticalScrollIndicator = false
+        controller.scrollView.alwaysBounceVertical = true
+        context.coordinator.controller = controller
+        context.coordinator.parent = self
+        return controller
+    }
+
+    func updateUIViewController(_ controller: TimelineScrollHostingController<Content>, context: Context) {
+        context.coordinator.parent = self
+        let hasPendingJump = pendingJumpRequest != nil
+        let preservedCenterDate = context.coordinator.range == range || hasPendingJump
+            ? nil
+            : context.coordinator.centerDate(for: controller.scrollView)
+
+        if context.coordinator.contentKey != contentKey {
+            controller.hostingController.rootView = content()
+            controller.hostingController.view.invalidateIntrinsicContentSize()
+            controller.view.setNeedsLayout()
+            context.coordinator.contentKey = contentKey
+        }
+
+        if context.coordinator.range != range {
+            context.coordinator.range = range
+        }
+
+        if let pendingJumpRequest, context.coordinator.handledJumpRequestID != pendingJumpRequest.id {
+            context.coordinator.handledJumpRequestID = pendingJumpRequest.id
+            context.coordinator.hasPositionedInitialCenter = true
+            context.coordinator.scheduleScroll(to: pendingJumpRequest.date, animated: false, controller: controller) {
+                onPendingJumpHandled()
+            }
+        } else if let preservedCenterDate {
+            context.coordinator.scheduleScroll(to: preservedCenterDate, animated: false, controller: controller)
+        } else if context.coordinator.hasPositionedInitialCenter == false {
+            context.coordinator.hasPositionedInitialCenter = true
+            context.coordinator.scheduleScroll(to: centerDate, animated: false, controller: controller)
+        }
+    }
+
+    static func dismantleUIViewController(_ controller: TimelineScrollHostingController<Content>, coordinator: Coordinator) {
+        coordinator.invalidateScheduledScrolls()
+        controller.scrollView.delegate = nil
+    }
+
+    final class Coordinator: NSObject, UIScrollViewDelegate {
+        var parent: TimelineScrollViewport
+        weak var controller: TimelineScrollHostingController<Content>?
+        var contentKey: TimelineViewportContentKey?
+        var range: ClosedRange<Date>?
+        var handledJumpRequestID: Int?
+        var hasPositionedInitialCenter = false
+        private var lastCenterDate: Date?
+        private var lastDisplayDay: Date?
+        private var isProgrammaticScroll = false
+        private var scheduledScrollID = 0
+
+        init(parent: TimelineScrollViewport) {
+            self.parent = parent
+            self.range = parent.range
+        }
+
+        func scrollViewDidScroll(_ scrollView: UIScrollView) {
+            guard isProgrammaticScroll == false else { return }
+            reportCenterDate(for: scrollView)
+        }
+
+        func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) {
+            isProgrammaticScroll = false
+            reportCenterDate(for: scrollView)
+        }
+
+        func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
+            reportCenterDate(for: scrollView)
+        }
+
+        func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
+            if decelerate == false {
+                reportCenterDate(for: scrollView)
+            }
+        }
+
+        func centerDate(for scrollView: UIScrollView) -> Date {
+            parent.scrollCoordinator.date(
+                atContentOffsetY: Double(scrollView.contentOffset.y),
+                in: range ?? parent.range,
+                containerHeight: Double(scrollView.bounds.height),
+                headerHeight: Double(parent.headerHeight),
+                pointsPerMinute: Double(parent.pointsPerMinute)
+            )
+        }
+
+        func scheduleScroll(
+            to date: Date,
+            animated: Bool,
+            controller: TimelineScrollHostingController<Content>,
+            afterScroll: (() -> Void)? = nil
+        ) {
+            scheduledScrollID += 1
+            let requestID = scheduledScrollID
+
+            Task { @MainActor [weak self, weak controller] in
+                await Task.yield()
+                guard let self, let controller, scheduledScrollID == requestID else { return }
+
+                for _ in 0..<4 {
+                    controller.view.layoutIfNeeded()
+                    controller.hostingController.view.layoutIfNeeded()
+
+                    let hasScrollableContent = controller.scrollView.bounds.height > 0
+                        && controller.scrollView.contentSize.height > controller.scrollView.bounds.height
+                    if hasScrollableContent {
+                        break
+                    }
+
+                    await Task.yield()
+                    guard scheduledScrollID == requestID else { return }
+                }
+
+                guard scheduledScrollID == requestID else { return }
+
+                scroll(to: date, animated: animated)
+                afterScroll?()
+            }
+        }
+
+        func invalidateScheduledScrolls() {
+            scheduledScrollID += 1
+        }
+
+        func scroll(to date: Date, animated: Bool) {
+            guard let controller else { return }
+            let boundedY = parent.scrollCoordinator.boundedContentOffsetY(
+                centering: date,
+                in: range ?? parent.range,
+                containerHeight: Double(controller.scrollView.bounds.height),
+                headerHeight: Double(parent.headerHeight),
+                pointsPerMinute: Double(parent.pointsPerMinute)
+            )
+            isProgrammaticScroll = animated
+            controller.scrollView.setContentOffset(CGPoint(x: 0, y: boundedY), animated: animated)
+            if animated == false {
+                isProgrammaticScroll = false
+                reportCenterDate(for: controller.scrollView)
+            } else {
+                Task { @MainActor [weak self, weak scrollView = controller.scrollView] in
+                    try? await Task.sleep(for: .milliseconds(350))
+                    guard let self, let scrollView else { return }
+                    isProgrammaticScroll = false
+                    reportCenterDate(for: scrollView)
+                }
+            }
+        }
+
+        private func reportCenterDate(for scrollView: UIScrollView) {
+            let centerDate = parent.scrollCoordinator.reportDate(for: centerDate(for: scrollView), stepMinutes: parent.centerStepMinutes)
+            let displayDay = parent.scrollCoordinator.displayDay(for: centerDate)
+
+            if lastCenterDate != centerDate {
+                lastCenterDate = centerDate
+                parent.onCenterDateChanged(centerDate)
+            }
+
+            if lastDisplayDay != displayDay {
+                lastDisplayDay = displayDay
+                parent.onDisplayDayChanged(displayDay)
+            }
+        }
+    }
+}
+
+private final class TimelineScrollHostingController<Content: View>: UIViewController {
+    let scrollView = UIScrollView()
+    let hostingController: UIHostingController<Content>
+
+    init(rootView: Content) {
+        self.hostingController = UIHostingController(rootView: rootView)
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        nil
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+
+        view.backgroundColor = .clear
+        scrollView.backgroundColor = .clear
+        scrollView.contentInsetAdjustmentBehavior = .never
+        scrollView.accessibilityIdentifier = "timeline-scroll-view"
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+
+        addChild(hostingController)
+        hostingController.view.backgroundColor = .clear
+        hostingController.view.translatesAutoresizingMaskIntoConstraints = false
+
+        view.addSubview(scrollView)
+        scrollView.addSubview(hostingController.view)
+        hostingController.didMove(toParent: self)
+
+        NSLayoutConstraint.activate([
+            scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            scrollView.topAnchor.constraint(equalTo: view.topAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+
+            hostingController.view.leadingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.leadingAnchor),
+            hostingController.view.trailingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.trailingAnchor),
+            hostingController.view.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
+            hostingController.view.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor),
+            hostingController.view.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor)
+        ])
+    }
+}
+
 private struct TimelineCanvasView: View {
     let range: ClosedRange<Date>
     let now: Date
@@ -429,10 +744,8 @@ private struct TimelineCanvasView: View {
                         style: style,
                         slotHeight: slotHeight
                     )
-                    .id(slot)
                 }
             }
-            .scrollTargetLayout()
 
             VStack(spacing: 0) {
                 Spacer()
@@ -608,6 +921,7 @@ private struct TimelineLegendView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
+        .accessibilityHidden(true)
     }
 }
 
@@ -929,6 +1243,7 @@ private struct TimelineGapCard: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel(item.title)
         .accessibilityValue(item.detail)
+        .accessibilityHidden(true)
     }
 }
 
@@ -982,6 +1297,7 @@ private struct TimelineCenterNowLine: View {
             .allowsHitTesting(false)
             .accessibilityLabel("Timeline center")
             .accessibilityValue(accessibilityValue)
+            .accessibilityIdentifier("timeline-center-time")
     }
 
     private var markerLineColor: Color {
@@ -1076,6 +1392,7 @@ private struct TimelineAllDayBackgroundBand: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel("All day event")
         .accessibilityValue(block.title)
+        .accessibilityHidden(true)
     }
 }
 

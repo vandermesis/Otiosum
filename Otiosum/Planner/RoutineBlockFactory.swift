@@ -16,7 +16,7 @@ struct RoutineBlockFactory {
         var blocks: [PlannedBlock] = []
         let mealDuration = budget.mealDurationMinutes
 
-        blocks.append(
+        appendBlock(
             makeBlock(
                 title: "Breakfast",
                 symbol: "fork.knife",
@@ -25,9 +25,10 @@ struct RoutineBlockFactory {
                 day: day,
                 startMinutes: template.breakfastMinutes,
                 durationMinutes: mealDuration
-            )
+            ),
+            to: &blocks
         )
-        blocks.append(
+        appendBlock(
             makeBlock(
                 title: "Lunch",
                 symbol: "fork.knife",
@@ -36,9 +37,10 @@ struct RoutineBlockFactory {
                 day: day,
                 startMinutes: template.lunchMinutes,
                 durationMinutes: mealDuration
-            )
+            ),
+            to: &blocks
         )
-        blocks.append(
+        appendBlock(
             makeBlock(
                 title: "Dinner",
                 symbol: "fork.knife",
@@ -47,9 +49,10 @@ struct RoutineBlockFactory {
                 day: day,
                 startMinutes: template.dinnerMinutes,
                 durationMinutes: mealDuration
-            )
+            ),
+            to: &blocks
         )
-        blocks.append(
+        appendBlock(
             makeBlock(
                 title: "Recovery",
                 symbol: "leaf.fill",
@@ -58,9 +61,10 @@ struct RoutineBlockFactory {
                 day: day,
                 startMinutes: template.quietStartMinutes,
                 durationMinutes: template.quietDurationMinutes
-            )
+            ),
+            to: &blocks
         )
-        blocks.append(
+        appendBlock(
             makeBlock(
                 title: "Sleep",
                 symbol: "bed.double.fill",
@@ -69,11 +73,12 @@ struct RoutineBlockFactory {
                 day: day,
                 startMinutes: template.sleepStartMinutes,
                 end: endOfDay
-            )
+            ),
+            to: &blocks
         )
 
         if template.includeWorkout {
-            blocks.append(
+            appendBlock(
                 makeBlock(
                     title: "Workout",
                     symbol: "figure.walk",
@@ -82,7 +87,8 @@ struct RoutineBlockFactory {
                     day: day,
                     startMinutes: template.workoutMinutes,
                     durationMinutes: template.workoutDurationMinutes
-                )
+                ),
+                to: &blocks
             )
         }
 
@@ -125,5 +131,10 @@ struct RoutineBlockFactory {
             status: .upcoming,
             confidence: 0.7
         )
+    }
+
+    private func appendBlock(_ block: PlannedBlock, to blocks: inout [PlannedBlock]) {
+        guard block.end > block.start else { return }
+        blocks.append(block)
     }
 }

@@ -174,6 +174,15 @@ final class PlannerShellViewModel {
         return plans
     }
 
+    func timelineTitleDate(
+        selectedDay: Date,
+        timelineCenterDate: Date,
+        calendar: Calendar = .current
+    ) -> Date {
+        _ = selectedDay
+        return calendar.startOfDay(for: timelineCenterDate)
+    }
+
     private func roundedInferenceContext(sceneIsActive: Bool) -> InferenceContext {
         let context = inferenceContext(sceneIsActive: sceneIsActive)
         return InferenceContext(
