@@ -1,0 +1,38 @@
+{
+  "configurations" : [
+    {
+      "id" : "E1E1EAA9-7F3F-4401-9CEC-B26E25BE7C19",
+      "name" : "Test Scheme Action",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "performanceAntipatternCheckerEnabled" : true,
+    "targetForVariableExpansion" : {
+      "containerPath" : "container:Otiosum.xcodeproj",
+      "identifier" : "BA06E1B22F918249003135A9",
+      "name" : "Otiosum"
+    }
+  },
+  "testTargets" : [
+    {
+      "parallelizable" : true,
+      "target" : {
+        "containerPath" : "container:Otiosum.xcodeproj",
+        "identifier" : "BA06E1C32F91824A003135A9",
+        "name" : "OtiosumTests"
+      }
+    },
+    {
+      "parallelizable" : true,
+      "target" : {
+        "containerPath" : "container:Otiosum.xcodeproj",
+        "identifier" : "BA06E1CD2F91824A003135A9",
+        "name" : "OtiosumUITests"
+      }
+    }
+  ],
+  "version" : 1
+}

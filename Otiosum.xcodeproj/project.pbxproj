@@ -31,6 +31,7 @@
 		BA06E1B32F918249003135A9 /* Otiosum.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Otiosum.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		BA06E1C42F91824A003135A9 /* OtiosumTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = OtiosumTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		BA06E1CE2F91824A003135A9 /* OtiosumUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = OtiosumUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		BA0CF1952FC0903C0005EC25 /* Otiosum.xctestplan */ = {isa = PBXFileReference; lastKnownFileType = text; path = Otiosum.xctestplan; sourceTree = "<group>"; };
 		BACE1D082F9533C100C64D3C /* SFSymbolsDB.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = SFSymbolsDB.txt; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -93,6 +94,7 @@
 		BA06E1AA2F918249003135A9 = {
 			isa = PBXGroup;
 			children = (
+				BA0CF1952FC0903C0005EC25 /* Otiosum.xctestplan */,
 				BACE1D082F9533C100C64D3C /* SFSymbolsDB.txt */,
 				BA06E1B52F918249003135A9 /* Otiosum */,
 				BA06E1C72F91824A003135A9 /* OtiosumTests */,

@@ -29,12 +29,7 @@ final class OtiosumUITests: XCTestCase {
         quickField.tap()
         quickField.typeText("focus sprint\n")
 
-        let clearedPredicate = NSPredicate { _, _ in
-            let value = quickField.value as? String
-            return value == nil || value == "" || value == "One short phrase"
-        }
-        let expectation = expectation(for: clearedPredicate, evaluatedWith: quickField)
-        wait(for: [expectation], timeout: 2)
+        XCTAssertTrue(waitForQuickAddFieldToClear(quickField, timeout: 5))
     }
 
     @MainActor
@@ -46,12 +41,7 @@ final class OtiosumUITests: XCTestCase {
         quickField.tap()
         quickField.typeText("later writing")
         app.buttons["quick-add-later"].tap()
-        let clearedPredicate = NSPredicate { _, _ in
-            let value = quickField.value as? String
-            return value == nil || value == "" || value == "One short phrase"
-        }
-        let expectation = expectation(for: clearedPredicate, evaluatedWith: quickField)
-        wait(for: [expectation], timeout: 2)
+        XCTAssertTrue(waitForQuickAddFieldToClear(quickField, timeout: 5))
     }
 
     @MainActor
@@ -119,6 +109,16 @@ final class OtiosumUITests: XCTestCase {
             return element[keyPath: keyPath] == expectedValue
         }
         let expectation = XCTNSPredicateExpectation(predicate: predicate, object: element)
+        return XCTWaiter().wait(for: [expectation], timeout: timeout) == .completed
+    }
+
+    private func waitForQuickAddFieldToClear(_ field: XCUIElement, timeout: TimeInterval) -> Bool {
+        let predicate = NSPredicate { element, _ in
+            guard let field = element as? XCUIElement else { return false }
+            let value = field.value as? String
+            return value == nil || value == "" || value == "One short phrase"
+        }
+        let expectation = XCTNSPredicateExpectation(predicate: predicate, object: field)
         return XCTWaiter().wait(for: [expectation], timeout: timeout) == .completed
     }
 

@@ -2,14 +2,14 @@ import Foundation
 
 struct PlannerEngine {
     private let calendar: Calendar
-    private let inferenceEngine: InferenceEngine
+    private let statusDecorator: BlockStatusDecorator
 
     init(
         calendar: Calendar = .current,
-        inferenceEngine: InferenceEngine = InferenceEngine()
+        statusDecorator: BlockStatusDecorator = BlockStatusDecorator()
     ) {
         self.calendar = calendar
-        self.inferenceEngine = inferenceEngine
+        self.statusDecorator = statusDecorator
     }
 
     func plan(
@@ -21,22 +21,24 @@ struct PlannerEngine {
         budget: DailyBudgetSnapshot,
         context: InferenceContext
     ) -> DayPlan {
-        let startOfDay = calendar.startOfDay(for: day)
-        let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay) ?? startOfDay.adding(minutes: 24 * 60)
-        let sleepBoundary = calendar.date(on: day, minutesFromStartOfDay: template.sleepStartMinutes)
+        let bounds = PlanningDayBounds.make(
+            for: day,
+            template: template,
+            calendar: calendar
+        )
 
         let templateBlocks = RoutineBlockFactory(calendar: calendar).makeBlocks(
             for: day,
             template: template,
             budget: budget,
-            endOfDay: endOfDay
+            endOfDay: bounds.endOfDay
         )
         let calendarBlocks = CalendarBlockFactory().makeBlocks(
             for: day,
             calendarEvents: calendarEvents,
             calendarLinks: calendarLinks,
-            startOfDay: startOfDay,
-            endOfDay: endOfDay
+            startOfDay: bounds.startOfDay,
+            endOfDay: bounds.endOfDay
         )
 
         let allDayCalendarBlocks = calendarBlocks.filter(\.isAllDay)
@@ -48,7 +50,7 @@ struct PlannerEngine {
             templateBlocks: templateBlocks,
             fixedBlocks: timedCalendarBlocks,
             template: template,
-            endOfDay: endOfDay
+            endOfDay: bounds.endOfDay
         )
         var tooMuchTodayIssues = localBlocks.tooMuchTodayIssues
 
@@ -59,7 +61,10 @@ struct PlannerEngine {
             transitionBufferMinutes: template.transitionBufferMinutes
         )
 
-        let finalBlocks = decorateStatuses(scheduled.blocks + allDayCalendarBlocks, context: context)
+        let finalBlocks = statusDecorator.decorate(
+            blocks: scheduled.blocks + allDayCalendarBlocks,
+            context: context
+        )
         tooMuchTodayIssues.append(contentsOf: scheduled.sleepCollisionIssues)
 
         let budgetSummary = BudgetSummaryFactory().makeSummary(
@@ -74,7 +79,7 @@ struct PlannerEngine {
             budgetSummary: budgetSummary,
             budget: budget,
             template: template,
-            sleepBoundary: sleepBoundary
+            sleepBoundary: bounds.sleepBoundary
         )
 
         let classification = TimelineBlockClassifier().classify(
@@ -93,44 +98,6 @@ struct PlannerEngine {
             shiftProposals: [],
             budgetSummary: budgetSummary
         )
-    }
-
-    private func decorateStatuses(
-        _ blocks: [PlannedBlock],
-        context: InferenceContext
-    ) -> [PlannedBlock] {
-        blocks.map { block in
-            let assessment = inferenceEngine.assess(block: block, now: context.now, context: context)
-            let resolvedCompletion = block.isCompleted || (block.isStarted && context.now >= block.end)
-            return PlannedBlock(
-                id: block.id,
-                itemID: block.itemID,
-                calendarEventID: block.calendarEventID,
-                title: block.title,
-                start: block.start,
-                end: block.end,
-                source: block.source,
-                flexibility: block.flexibility,
-                symbolName: block.symbolName,
-                tintToken: block.tintToken,
-                notes: block.notes,
-                isAllDay: block.isAllDay,
-                routineRole: block.routineRole,
-                isCompleted: resolvedCompletion,
-                isStarted: resolvedCompletion ? false : block.isStarted,
-                status: assessment.status,
-                confidence: assessment.confidence
-            )
-        }
-        .sorted(by: blockSort)
-    }
-
-    private func blockSort(_ lhs: PlannedBlock, _ rhs: PlannedBlock) -> Bool {
-        if lhs.start == rhs.start {
-            return lhs.end < rhs.end
-        }
-
-        return lhs.start < rhs.start
     }
 
     private func deduplicated(_ issues: [TooMuchTodayIssue]) -> [TooMuchTodayIssue] {
