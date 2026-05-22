@@ -3,16 +3,16 @@ import Foundation
 struct PlannerEngine {
     private let calendar: Calendar
     private let statusDecorator: BlockStatusDecorator
-    private let issueDeduplicator: TooMuchTodayIssueDeduplicator
+    private let dayPlanFactory: DayPlanFactory
 
     init(
         calendar: Calendar = .current,
         statusDecorator: BlockStatusDecorator = BlockStatusDecorator(),
-        issueDeduplicator: TooMuchTodayIssueDeduplicator = TooMuchTodayIssueDeduplicator()
+        dayPlanFactory: DayPlanFactory = DayPlanFactory()
     ) {
         self.calendar = calendar
         self.statusDecorator = statusDecorator
-        self.issueDeduplicator = issueDeduplicator
+        self.dayPlanFactory = dayPlanFactory
     }
 
     func plan(
@@ -70,36 +70,15 @@ struct PlannerEngine {
         )
         tooMuchTodayIssues.append(contentsOf: scheduled.sleepCollisionIssues)
 
-        let budgetSummary = BudgetSummaryFactory().makeSummary(
-            blocks: finalBlocks,
-            budget: budget
-        )
-
-        let warnings = PlannerWarningBuilder().makeWarnings(
+        return dayPlanFactory.makePlan(
+            day: day,
             blocks: finalBlocks,
             tooMuchTodayIssues: tooMuchTodayIssues,
             shiftProposals: [],
-            budgetSummary: budgetSummary,
             budget: budget,
             template: template,
-            sleepBoundary: bounds.sleepBoundary
-        )
-
-        let classification = TimelineBlockClassifier().classify(
-            blocks: finalBlocks,
-            now: context.now
-        )
-
-        return DayPlan(
-            day: day,
-            allBlocks: finalBlocks,
-            nowBlock: classification.nowBlock,
-            nextBlock: classification.nextBlock,
-            laterBlocks: classification.laterBlocks,
-            warnings: warnings,
-            tooMuchTodayIssues: issueDeduplicator.deduplicate(tooMuchTodayIssues),
-            shiftProposals: [],
-            budgetSummary: budgetSummary
+            sleepBoundary: bounds.sleepBoundary,
+            context: context
         )
     }
 }
