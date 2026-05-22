@@ -7,9 +7,14 @@ struct LocalBlockFactoryResult: Equatable, Sendable {
 
 struct LocalBlockFactory {
     private let calendar: Calendar
+    private let itemPlacer: LocalItemTimelinePlacer
 
-    init(calendar: Calendar = .current) {
+    init(
+        calendar: Calendar = .current,
+        itemPlacer: LocalItemTimelinePlacer? = nil
+    ) {
         self.calendar = calendar
+        self.itemPlacer = itemPlacer ?? LocalItemTimelinePlacer(calendar: calendar)
     }
 
     func makeBlocks(
@@ -49,17 +54,20 @@ struct LocalBlockFactory {
             .sorted(by: localItemSort)
 
         for item in scheduledItems {
-            switch place(
+            let placement = itemPlacer.place(
                 item: item,
                 day: day,
                 existingBlocks: allBlocks,
                 template: template,
                 endOfDay: endOfDay
-            ) {
-            case .scheduled(let block):
+            )
+
+            if let block = placement.block {
                 allBlocks.append(block)
                 allBlocks.sort(by: TimelineBlockSorter.areInTimelineOrder)
-            case .tooMuchToday(let issue):
+            }
+
+            if let issue = placement.tooMuchTodayIssue {
                 tooMuchTodayIssues.append(issue)
             }
         }
@@ -85,61 +93,6 @@ struct LocalBlockFactory {
                     block.title == item.title && block.routineRole == item.routineRole
                 }
         }
-    }
-
-    private func place(
-        item: EventSnapshot,
-        day: Date,
-        existingBlocks: [PlannedBlock],
-        template: DayTemplateSnapshot,
-        endOfDay: Date
-    ) -> LocalPlacementResult {
-        let startMinutes = max(
-            item.preferredStartMinutes ?? item.preferredTimeWindow.startMinutes,
-            template.wakeUpMinutes
-        )
-        let duration = max(item.targetDurationMinutes, item.minimumDurationMinutes)
-        var candidateStart = calendar.date(on: day, minutesFromStartOfDay: startMinutes)
-
-        while candidateStart < endOfDay {
-            let candidateEnd = candidateStart.adding(minutes: duration)
-            if candidateEnd > endOfDay {
-                return .tooMuchToday(
-                    TooMuchTodayIssue(
-                        itemID: item.id,
-                        title: item.title,
-                        message: item.forceAfterBedtime
-                            ? "There is no calm slot left today."
-                            : "Not enough room today. This would cut into sleep or recovery.",
-                        displacedRole: item.forceAfterBedtime ? nil : .sleep,
-                        suggestedDate: calendar.date(byAdding: .day, value: 1, to: day) ?? day
-                    )
-                )
-            }
-
-            if let conflict = existingBlocks.first(where: { overlaps(start: candidateStart, end: candidateEnd, with: $0) }) {
-                candidateStart = conflict.end.adding(minutes: template.transitionBufferMinutes)
-                continue
-            }
-
-            return .scheduled(
-                makeBlock(
-                    item: item,
-                    start: candidateStart,
-                    end: candidateEnd
-                )
-            )
-        }
-
-        return .tooMuchToday(
-            TooMuchTodayIssue(
-                itemID: item.id,
-                title: item.title,
-                message: "This can wait. The day is already full.",
-                displacedRole: nil,
-                suggestedDate: calendar.date(byAdding: .day, value: 1, to: day) ?? day
-            )
-        )
     }
 
     private func makeLocalTemplateOverrideBlock(
@@ -181,14 +134,6 @@ struct LocalBlockFactory {
         )
     }
 
-    private func overlaps(
-        start: Date,
-        end: Date,
-        with block: PlannedBlock
-    ) -> Bool {
-        start < block.end && end > block.start
-    }
-
     private func localItemSort(_ lhs: EventSnapshot, _ rhs: EventSnapshot) -> Bool {
         let lhsStart = lhs.preferredStartMinutes ?? lhs.preferredTimeWindow.startMinutes
         let rhsStart = rhs.preferredStartMinutes ?? rhs.preferredTimeWindow.startMinutes
@@ -200,9 +145,4 @@ struct LocalBlockFactory {
         return lhsStart < rhsStart
     }
 
-}
-
-private enum LocalPlacementResult {
-    case scheduled(PlannedBlock)
-    case tooMuchToday(TooMuchTodayIssue)
 }
