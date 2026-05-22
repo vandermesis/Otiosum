@@ -459,6 +459,302 @@ struct PlannerStoreTests {
         #expect(store.pendingCalendarShift?.proposal.calendarEventID == "A")
     }
 
+    @Test("Moving event later adds offset minutes and lifts saved-for-later flag")
+    func moveEventLaterAddsOffset() throws {
+        let modelContext = try makeModelContext()
+        let store = PlannerStore()
+        let day = Calendar.current.startOfDay(for: Date(timeIntervalSinceReferenceDate: 210_000))
+        let item = Event(
+            title: "Push out",
+            suggestedIcon: "clock",
+            tintToken: "sky",
+            scheduledDay: day,
+            preferredStartMinutes: 9 * 60,
+            isSavedForLater: true
+        )
+        modelContext.insert(item)
+        try modelContext.save()
+
+        store.moveEventLater(item, by: 45, on: day, modelContext: modelContext)
+
+        #expect(item.scheduledDay == day)
+        #expect(item.preferredStartMinutes == 9 * 60 + 45)
+        #expect(item.isSavedForLater == false)
+    }
+
+    @Test("Moving event later seeds preferred start from now when previously absent")
+    func moveEventLaterSeedsStartMinutesWhenNil() throws {
+        let modelContext = try makeModelContext()
+        let store = PlannerStore()
+        let day = Calendar.current.startOfDay(for: Date(timeIntervalSinceReferenceDate: 220_000))
+        let item = Event(
+            title: "Free floater",
+            suggestedIcon: "clock",
+            tintToken: "sky",
+            scheduledDay: nil,
+            preferredStartMinutes: nil
+        )
+        modelContext.insert(item)
+        try modelContext.save()
+
+        store.moveEventLater(item, on: day, modelContext: modelContext)
+
+        #expect(item.scheduledDay == day)
+        let resolved = try #require(item.preferredStartMinutes)
+        #expect(resolved >= DayTemplateSnapshot.default.wakeUpMinutes + 30)
+    }
+
+    @Test("Toggling completion on an unfinished started event completes it and clears started")
+    func toggleCompletionMarksComplete() throws {
+        let modelContext = try makeModelContext()
+        let store = PlannerStore()
+        let item = Event(
+            title: "Wrap up",
+            suggestedIcon: "checkmark",
+            tintToken: "mint",
+            isCompleted: false,
+            isStarted: true
+        )
+        modelContext.insert(item)
+        try modelContext.save()
+
+        store.toggleCompletion(item, modelContext: modelContext)
+
+        #expect(item.isCompleted)
+        #expect(item.isStarted == false)
+    }
+
+    @Test("Toggling a completed event un-completes it without restoring started")
+    func toggleCompletionUncompletes() throws {
+        let modelContext = try makeModelContext()
+        let store = PlannerStore()
+        let item = Event(
+            title: "Redo",
+            suggestedIcon: "arrow.uturn.left",
+            tintToken: "sky",
+            isCompleted: true,
+            isStarted: false
+        )
+        modelContext.insert(item)
+        try modelContext.save()
+
+        store.toggleCompletion(item, modelContext: modelContext)
+
+        #expect(item.isCompleted == false)
+        #expect(item.isStarted == false)
+    }
+
+    @Test("setCompletion writes the requested value and clears started when completing")
+    func setCompletionForwardsValueAndClearsStarted() throws {
+        let modelContext = try makeModelContext()
+        let store = PlannerStore()
+        let item = Event(
+            title: "Manual finish",
+            suggestedIcon: "checkmark",
+            tintToken: "mint",
+            isCompleted: false,
+            isStarted: true
+        )
+        modelContext.insert(item)
+        try modelContext.save()
+
+        store.setCompletion(item, isCompleted: true, modelContext: modelContext)
+        #expect(item.isCompleted)
+        #expect(item.isStarted == false)
+
+        store.setCompletion(item, isCompleted: false, modelContext: modelContext)
+        #expect(item.isCompleted == false)
+        #expect(item.isStarted == false)
+    }
+
+    @Test("Saving an event for Later clears scheduling and forceAfterBedtime")
+    func saveEventForLaterClearsSchedule() throws {
+        let modelContext = try makeModelContext()
+        let store = PlannerStore()
+        let item = Event(
+            title: "Stash",
+            suggestedIcon: "tray",
+            tintToken: "sage",
+            scheduledDay: Date(timeIntervalSinceReferenceDate: 230_000),
+            preferredStartMinutes: 14 * 60,
+            isSavedForLater: false,
+            forceAfterBedtime: true
+        )
+        modelContext.insert(item)
+        try modelContext.save()
+
+        store.saveEventForLater(item, modelContext: modelContext)
+
+        #expect(item.isSavedForLater)
+        #expect(item.scheduledDay == nil)
+        #expect(item.forceAfterBedtime == false)
+    }
+
+    @Test("Updating calendar flexibility creates a CalendarLink when none exists")
+    func updateCalendarFlexibilityCreatesLink() throws {
+        let modelContext = try makeModelContext()
+        let store = PlannerStore()
+
+        store.updateCalendarFlexibility(
+            for: "evt-new",
+            title: "Standup",
+            flexibility: .locked,
+            modelContext: modelContext
+        )
+
+        let links = try modelContext.fetch(FetchDescriptor<CalendarLink>())
+        let link = try #require(links.first)
+        #expect(links.count == 1)
+        #expect(link.calendarEventID == "evt-new")
+        #expect(link.title == "Standup")
+        #expect(link.flexibility == .locked)
+    }
+
+    @Test("Updating calendar flexibility updates an existing link, refreshes title and timestamp")
+    func updateCalendarFlexibilityUpdatesExistingLink() throws {
+        let modelContext = try makeModelContext()
+        let store = PlannerStore()
+        let originalUpdate = Date(timeIntervalSinceReferenceDate: 240_000)
+        let existing = CalendarLink(
+            calendarEventID: "evt-existing",
+            title: "Old title",
+            flexibility: .askBeforeMove,
+            editPolicy: .askEveryTime,
+            updatedAt: originalUpdate
+        )
+        modelContext.insert(existing)
+        try modelContext.save()
+
+        store.updateCalendarFlexibility(
+            for: "evt-existing",
+            title: "New title",
+            flexibility: .flexible,
+            modelContext: modelContext
+        )
+
+        let links = try modelContext.fetch(FetchDescriptor<CalendarLink>())
+        #expect(links.count == 1)
+        #expect(existing.title == "New title")
+        #expect(existing.flexibility == .flexible)
+        #expect(existing.updatedAt > originalUpdate)
+    }
+
+    @Test("moveOnlyInOtiosum calendar decision writes overrides without touching EventKit")
+    func applyCalendarDecisionMoveOnlyInOtiosum() async throws {
+        let modelContext = try makeModelContext()
+        let store = PlannerStore()
+        let proposal = CalendarShiftProposal(
+            calendarEventID: "evt-move",
+            title: "Sync",
+            currentStart: Date(timeIntervalSinceReferenceDate: 300_000),
+            currentEnd: Date(timeIntervalSinceReferenceDate: 301_800),
+            suggestedStart: Date(timeIntervalSinceReferenceDate: 303_600),
+            suggestedEnd: Date(timeIntervalSinceReferenceDate: 305_400)
+        )
+        store.pendingCalendarShift = PendingCalendarShiftState(proposal: proposal)
+
+        await store.applyCalendarDecision(.moveOnlyInOtiosum, modelContext: modelContext)
+
+        let link = try #require(try modelContext.fetch(FetchDescriptor<CalendarLink>()).first)
+        #expect(link.calendarEventID == "evt-move")
+        #expect(link.flexibility == .flexible)
+        #expect(link.editPolicy == .localOnly)
+        #expect(link.localOverrideStart == proposal.suggestedStart)
+        #expect(link.localOverrideEnd == proposal.suggestedEnd)
+        #expect(store.pendingCalendarShift == nil)
+    }
+
+    @Test("keepFixed calendar decision locks the link and clears overrides")
+    func applyCalendarDecisionKeepFixed() async throws {
+        let modelContext = try makeModelContext()
+        let store = PlannerStore()
+        let preexisting = CalendarLink(
+            calendarEventID: "evt-keep",
+            title: "Sync",
+            flexibility: .flexible,
+            editPolicy: .localOnly,
+            localOverrideStart: Date(timeIntervalSinceReferenceDate: 310_000),
+            localOverrideEnd: Date(timeIntervalSinceReferenceDate: 311_800)
+        )
+        modelContext.insert(preexisting)
+        try modelContext.save()
+
+        let proposal = CalendarShiftProposal(
+            calendarEventID: "evt-keep",
+            title: "Sync",
+            currentStart: Date(timeIntervalSinceReferenceDate: 312_000),
+            currentEnd: Date(timeIntervalSinceReferenceDate: 313_800),
+            suggestedStart: Date(timeIntervalSinceReferenceDate: 314_000),
+            suggestedEnd: Date(timeIntervalSinceReferenceDate: 315_800)
+        )
+        store.pendingCalendarShift = PendingCalendarShiftState(proposal: proposal)
+
+        await store.applyCalendarDecision(.keepFixed, modelContext: modelContext)
+
+        #expect(preexisting.flexibility == .locked)
+        #expect(preexisting.editPolicy == .askEveryTime)
+        #expect(preexisting.localOverrideStart == nil)
+        #expect(preexisting.localOverrideEnd == nil)
+        #expect(store.pendingCalendarShift == nil)
+    }
+
+    @Test("editRealEvent records an error and clears the prompt when calendar access is denied")
+    func applyCalendarDecisionEditRealEventFailure() async throws {
+        let modelContext = try makeModelContext()
+        let store = PlannerStore()
+        let proposal = CalendarShiftProposal(
+            calendarEventID: "evt-edit",
+            title: "Sync",
+            currentStart: Date(timeIntervalSinceReferenceDate: 320_000),
+            currentEnd: Date(timeIntervalSinceReferenceDate: 321_800),
+            suggestedStart: Date(timeIntervalSinceReferenceDate: 322_000),
+            suggestedEnd: Date(timeIntervalSinceReferenceDate: 323_800)
+        )
+        store.pendingCalendarShift = PendingCalendarShiftState(proposal: proposal)
+
+        await store.applyCalendarDecision(.editRealEvent, modelContext: modelContext)
+
+        #expect(store.calendarService.lastErrorMessage != nil)
+        let link = try #require(try modelContext.fetch(FetchDescriptor<CalendarLink>()).first)
+        #expect(link.localOverrideStart == nil)
+        #expect(link.localOverrideEnd == nil)
+        #expect(store.pendingCalendarShift == nil)
+    }
+
+    @Test(
+        "Quick capture maps preferred start hour to its inferred time window",
+        arguments: [
+            (8, PreferredTimeWindow.morning),
+            (11, PreferredTimeWindow.morning),
+            (12, PreferredTimeWindow.afternoon),
+            (16, PreferredTimeWindow.afternoon),
+            (17, PreferredTimeWindow.evening),
+            (20, PreferredTimeWindow.evening),
+            (21, PreferredTimeWindow.night),
+            (23, PreferredTimeWindow.night)
+        ]
+    )
+    func captureQuickEventInferredWindow(hour: Int, expected: PreferredTimeWindow) throws {
+        let modelContext = try makeModelContext()
+        let store = PlannerStore()
+        try store.ensureSeedData(in: modelContext)
+
+        let calendar = Calendar.current
+        let day = calendar.startOfDay(for: Date(timeIntervalSinceReferenceDate: 400_000))
+        let anchor = try #require(calendar.date(byAdding: .hour, value: hour, to: day))
+
+        store.todayQuickCapture = "Window probe \(hour)"
+        store.captureQuickEvent(
+            modelContext: modelContext,
+            day: day,
+            template: .default,
+            preferredStartDate: anchor
+        )
+
+        let item = try #require(try modelContext.fetch(FetchDescriptor<Event>()).first)
+        #expect(item.preferredTimeWindow == expected)
+    }
+
     @Test("Started events are completed when their scheduled end passes")
     func completeFinishedStartedEvents() throws {
         let modelContext = try makeModelContext()

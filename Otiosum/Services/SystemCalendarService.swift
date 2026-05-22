@@ -62,7 +62,7 @@ final class SystemCalendarService {
                 isAllDay: event.isAllDay
             )
 
-            for day in dayEntries(for: snapshot, within: interval) {
+            for day in Self.dayEntriesSpanning(snapshot, within: interval, calendar: calendar) {
                 dayCache[cacheKey(for: day), default: []].append(snapshot)
             }
         }
@@ -95,9 +95,13 @@ final class SystemCalendarService {
         }
     }
 
-    private func dayEntries(for snapshot: CalendarEventSnapshot, within interval: DateInterval) -> [Date] {
+    nonisolated static func dayEntriesSpanning(
+        _ snapshot: CalendarEventSnapshot,
+        within interval: DateInterval,
+        calendar: Calendar
+    ) -> [Date] {
         var days: [Date] = []
-        var cursor = max(snapshot.start, interval.start).startOfDay(using: calendar)
+        var cursor = calendar.startOfDay(for: max(snapshot.start, interval.start))
         let end = min(snapshot.end, interval.end)
 
         while cursor <= end {
