@@ -6,18 +6,19 @@ struct LocalBlockFactoryResult: Equatable, Sendable {
 }
 
 struct LocalBlockFactory {
-    private let calendar: Calendar
     private let itemPlacer: LocalItemTimelinePlacer
     private let templateOverrideFactory: LocalTemplateOverrideFactory
+    private let scheduledItemSelector: LocalScheduledItemSelector
 
     init(
         calendar: Calendar = .current,
         itemPlacer: LocalItemTimelinePlacer? = nil,
-        templateOverrideFactory: LocalTemplateOverrideFactory? = nil
+        templateOverrideFactory: LocalTemplateOverrideFactory? = nil,
+        scheduledItemSelector: LocalScheduledItemSelector? = nil
     ) {
-        self.calendar = calendar
         self.itemPlacer = itemPlacer ?? LocalItemTimelinePlacer(calendar: calendar)
         self.templateOverrideFactory = templateOverrideFactory ?? LocalTemplateOverrideFactory(calendar: calendar)
+        self.scheduledItemSelector = scheduledItemSelector ?? LocalScheduledItemSelector(calendar: calendar)
     }
 
     func makeBlocks(
@@ -39,14 +40,11 @@ struct LocalBlockFactory {
             .sorted(by: TimelineBlockSorter.areInTimelineOrder)
         var tooMuchTodayIssues: [TooMuchTodayIssue] = []
 
-        let scheduledItems = localItems
-            .filter { item in
-                guard let scheduledDay = item.scheduledDay else { return false }
-                return calendar.isDate(scheduledDay, inSameDayAs: day)
-                    && item.isSavedForLater == false
-                    && templateOverrides.overrideItemIDs.contains(item.id) == false
-            }
-            .sorted(by: localItemSort)
+        let scheduledItems = scheduledItemSelector.scheduledItems(
+            from: localItems,
+            day: day,
+            excludingItemIDs: templateOverrides.overrideItemIDs
+        )
 
         for item in scheduledItems {
             let placement = itemPlacer.place(
@@ -71,17 +69,6 @@ struct LocalBlockFactory {
             blocks: allBlocks,
             tooMuchTodayIssues: tooMuchTodayIssues
         )
-    }
-
-    private func localItemSort(_ lhs: EventSnapshot, _ rhs: EventSnapshot) -> Bool {
-        let lhsStart = lhs.preferredStartMinutes ?? lhs.preferredTimeWindow.startMinutes
-        let rhsStart = rhs.preferredStartMinutes ?? rhs.preferredTimeWindow.startMinutes
-
-        if lhsStart == rhsStart {
-            return lhs.orderHint < rhs.orderHint
-        }
-
-        return lhsStart < rhsStart
     }
 
 }
