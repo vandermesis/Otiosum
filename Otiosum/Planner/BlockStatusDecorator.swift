@@ -34,14 +34,6 @@ struct BlockStatusDecorator {
                 confidence: assessment.confidence
             )
         }
-        .sorted(by: blockSort)
-    }
-
-    private func blockSort(_ lhs: PlannedBlock, _ rhs: PlannedBlock) -> Bool {
-        if lhs.start == rhs.start {
-            return lhs.end < rhs.end
-        }
-
-        return lhs.start < rhs.start
+        .sorted(by: TimelineBlockSorter.areInTimelineOrder)
     }
 }

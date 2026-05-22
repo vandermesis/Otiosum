@@ -35,7 +35,8 @@ struct LocalBlockFactory {
             } == false
         }
 
-        var allBlocks = (routineBlocks + fixedBlocks + localTemplateOverrideBlocks).sorted(by: blockSort)
+        var allBlocks = (routineBlocks + fixedBlocks + localTemplateOverrideBlocks)
+            .sorted(by: TimelineBlockSorter.areInTimelineOrder)
         var tooMuchTodayIssues: [TooMuchTodayIssue] = []
 
         let scheduledItems = localItems
@@ -57,7 +58,7 @@ struct LocalBlockFactory {
             ) {
             case .scheduled(let block):
                 allBlocks.append(block)
-                allBlocks.sort(by: blockSort)
+                allBlocks.sort(by: TimelineBlockSorter.areInTimelineOrder)
             case .tooMuchToday(let issue):
                 tooMuchTodayIssues.append(issue)
             }
@@ -199,13 +200,6 @@ struct LocalBlockFactory {
         return lhsStart < rhsStart
     }
 
-    private func blockSort(_ lhs: PlannedBlock, _ rhs: PlannedBlock) -> Bool {
-        if lhs.start == rhs.start {
-            return lhs.end < rhs.end
-        }
-
-        return lhs.start < rhs.start
-    }
 }
 
 private enum LocalPlacementResult {

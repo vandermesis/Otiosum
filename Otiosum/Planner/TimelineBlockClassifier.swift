@@ -13,7 +13,7 @@ struct TimelineBlockClassifier {
     ) -> TimelineBlockClassification {
         let incompleteBlocks = blocks
             .filter { $0.isCompleted == false && $0.isAllDay == false }
-            .sorted(by: blockSort)
+            .sorted(by: TimelineBlockSorter.areInTimelineOrder)
 
         let nowBlock = incompleteBlocks.last(where: { now >= $0.start && now < $0.end })
         let nextBlock = incompleteBlocks.first(where: { $0.start > now })
@@ -28,11 +28,4 @@ struct TimelineBlockClassifier {
         )
     }
 
-    private func blockSort(_ lhs: PlannedBlock, _ rhs: PlannedBlock) -> Bool {
-        if lhs.start == rhs.start {
-            return lhs.end < rhs.end
-        }
-
-        return lhs.start < rhs.start
-    }
 }

@@ -15,10 +15,16 @@ struct TimelineMoveResult: Equatable, Sendable {
 struct TimelineScheduler {
     private let calendar: Calendar
     private let stepMinutes: Int
+    private let issueDeduplicator: TooMuchTodayIssueDeduplicator
 
-    init(calendar: Calendar = .current, stepMinutes: Int = 5) {
+    init(
+        calendar: Calendar = .current,
+        stepMinutes: Int = 5,
+        issueDeduplicator: TooMuchTodayIssueDeduplicator = TooMuchTodayIssueDeduplicator()
+    ) {
         self.calendar = calendar
         self.stepMinutes = stepMinutes
+        self.issueDeduplicator = issueDeduplicator
     }
 
     func schedule(
@@ -32,7 +38,7 @@ struct TimelineScheduler {
             return TimelineScheduleResult(blocks: compacted(blocks, transitionBufferMinutes: transitionBufferMinutes), sleepCollisionIssues: [])
         }
 
-        let sortedBlocks = blocks.sorted(by: blockSort)
+        let sortedBlocks = blocks.sorted(by: TimelineBlockSorter.areInTimelineOrder)
         guard let pushIndex = sortedBlocks.firstIndex(where: { shouldPushByCurrentTime($0, now: now) }) else {
             return TimelineScheduleResult(blocks: compacted(sortedBlocks, transitionBufferMinutes: transitionBufferMinutes), sleepCollisionIssues: [])
         }
@@ -76,7 +82,7 @@ struct TimelineScheduler {
 
         return TimelineScheduleResult(
             blocks: compacted(result, transitionBufferMinutes: transitionBufferMinutes),
-            sleepCollisionIssues: deduplicated(sleepCollisionIssues)
+            sleepCollisionIssues: issueDeduplicator.deduplicate(sleepCollisionIssues)
         )
     }
 
@@ -121,7 +127,7 @@ struct TimelineScheduler {
         var result: [PlannedBlock] = []
         var runningEnd: Date?
 
-        for block in blocks.sorted(by: blockSort) {
+        for block in blocks.sorted(by: TimelineBlockSorter.areInTimelineOrder) {
             guard block.isAllDay == false else {
                 result.append(block)
                 continue
@@ -134,7 +140,7 @@ struct TimelineScheduler {
             runningEnd = end.adding(minutes: transitionBufferMinutes)
         }
 
-        return result.sorted(by: blockSort)
+        return result.sorted(by: TimelineBlockSorter.areInTimelineOrder)
     }
 
     private func shouldPushByCurrentTime(_ block: PlannedBlock, now: Date) -> Bool {
@@ -175,22 +181,10 @@ struct TimelineScheduler {
         )
     }
 
-    private func blockSort(_ lhs: PlannedBlock, _ rhs: PlannedBlock) -> Bool {
-        if lhs.start == rhs.start {
-            return lhs.end < rhs.end
-        }
-
-        return lhs.start < rhs.start
-    }
-
     private func roundUp(_ date: Date) -> Date {
         let interval = TimeInterval(stepMinutes * 60)
         let rounded = ceil(date.timeIntervalSinceReferenceDate / interval) * interval
         return Date(timeIntervalSinceReferenceDate: rounded)
     }
 
-    private func deduplicated(_ issues: [TooMuchTodayIssue]) -> [TooMuchTodayIssue] {
-        var seen = Set<UUID>()
-        return issues.filter { seen.insert($0.itemID).inserted }
-    }
 }

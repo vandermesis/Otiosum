@@ -3,13 +3,16 @@ import Foundation
 struct PlannerEngine {
     private let calendar: Calendar
     private let statusDecorator: BlockStatusDecorator
+    private let issueDeduplicator: TooMuchTodayIssueDeduplicator
 
     init(
         calendar: Calendar = .current,
-        statusDecorator: BlockStatusDecorator = BlockStatusDecorator()
+        statusDecorator: BlockStatusDecorator = BlockStatusDecorator(),
+        issueDeduplicator: TooMuchTodayIssueDeduplicator = TooMuchTodayIssueDeduplicator()
     ) {
         self.calendar = calendar
         self.statusDecorator = statusDecorator
+        self.issueDeduplicator = issueDeduplicator
     }
 
     func plan(
@@ -94,14 +97,9 @@ struct PlannerEngine {
             nextBlock: classification.nextBlock,
             laterBlocks: classification.laterBlocks,
             warnings: warnings,
-            tooMuchTodayIssues: deduplicated(tooMuchTodayIssues),
+            tooMuchTodayIssues: issueDeduplicator.deduplicate(tooMuchTodayIssues),
             shiftProposals: [],
             budgetSummary: budgetSummary
         )
-    }
-
-    private func deduplicated(_ issues: [TooMuchTodayIssue]) -> [TooMuchTodayIssue] {
-        var seen = Set<UUID>()
-        return issues.filter { seen.insert($0.itemID).inserted }
     }
 }
