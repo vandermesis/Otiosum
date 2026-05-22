@@ -8,13 +8,16 @@ struct LocalBlockFactoryResult: Equatable, Sendable {
 struct LocalBlockFactory {
     private let calendar: Calendar
     private let itemPlacer: LocalItemTimelinePlacer
+    private let templateOverrideFactory: LocalTemplateOverrideFactory
 
     init(
         calendar: Calendar = .current,
-        itemPlacer: LocalItemTimelinePlacer? = nil
+        itemPlacer: LocalItemTimelinePlacer? = nil,
+        templateOverrideFactory: LocalTemplateOverrideFactory? = nil
     ) {
         self.calendar = calendar
         self.itemPlacer = itemPlacer ?? LocalItemTimelinePlacer(calendar: calendar)
+        self.templateOverrideFactory = templateOverrideFactory ?? LocalTemplateOverrideFactory(calendar: calendar)
     }
 
     func makeBlocks(
@@ -25,22 +28,14 @@ struct LocalBlockFactory {
         template: DayTemplateSnapshot,
         endOfDay: Date
     ) -> LocalBlockFactoryResult {
-        let templateOverrides = matchingTemplateOverrides(
-            in: localItems,
+        let templateOverrides = templateOverrideFactory.makeOverrides(
+            localItems: localItems,
             day: day,
-            templateBlocks: templateBlocks
+            templateBlocks: templateBlocks,
+            endOfDay: endOfDay
         )
-        let templateOverrideIDs = Set(templateOverrides.map(\.id))
-        let localTemplateOverrideBlocks = templateOverrides.map {
-            makeLocalTemplateOverrideBlock(item: $0, day: day, endOfDay: endOfDay)
-        }
-        let routineBlocks = templateBlocks.filter { block in
-            templateOverrides.contains { override in
-                override.title == block.title && override.routineRole == block.routineRole
-            } == false
-        }
 
-        var allBlocks = (routineBlocks + fixedBlocks + localTemplateOverrideBlocks)
+        var allBlocks = (templateOverrides.remainingTemplateBlocks + fixedBlocks + templateOverrides.overrideBlocks)
             .sorted(by: TimelineBlockSorter.areInTimelineOrder)
         var tooMuchTodayIssues: [TooMuchTodayIssue] = []
 
@@ -49,7 +44,7 @@ struct LocalBlockFactory {
                 guard let scheduledDay = item.scheduledDay else { return false }
                 return calendar.isDate(scheduledDay, inSameDayAs: day)
                     && item.isSavedForLater == false
-                    && templateOverrideIDs.contains(item.id) == false
+                    && templateOverrides.overrideItemIDs.contains(item.id) == false
             }
             .sorted(by: localItemSort)
 
@@ -75,62 +70,6 @@ struct LocalBlockFactory {
         return LocalBlockFactoryResult(
             blocks: allBlocks,
             tooMuchTodayIssues: tooMuchTodayIssues
-        )
-    }
-
-    private func matchingTemplateOverrides(
-        in localItems: [EventSnapshot],
-        day: Date,
-        templateBlocks: [PlannedBlock]
-    ) -> [EventSnapshot] {
-        localItems.filter { item in
-            guard let scheduledDay = item.scheduledDay else { return false }
-            return item.source == .local
-                && item.routineRole != nil
-                && item.isSavedForLater == false
-                && calendar.isDate(scheduledDay, inSameDayAs: day)
-                && templateBlocks.contains { block in
-                    block.title == item.title && block.routineRole == item.routineRole
-                }
-        }
-    }
-
-    private func makeLocalTemplateOverrideBlock(
-        item: EventSnapshot,
-        day: Date,
-        endOfDay: Date
-    ) -> PlannedBlock {
-        let startMinutes = item.preferredStartMinutes ?? item.preferredTimeWindow.startMinutes
-        let duration = max(item.targetDurationMinutes, item.minimumDurationMinutes)
-        let start = calendar.date(on: day, minutesFromStartOfDay: startMinutes)
-        let end = min(start.adding(minutes: duration), endOfDay)
-
-        return makeBlock(item: item, start: start, end: end)
-    }
-
-    private func makeBlock(
-        item: EventSnapshot,
-        start: Date,
-        end: Date
-    ) -> PlannedBlock {
-        PlannedBlock(
-            id: item.id,
-            itemID: item.id,
-            calendarEventID: item.calendarEventID,
-            title: item.title,
-            start: start,
-            end: end,
-            source: item.source,
-            flexibility: item.flexibility,
-            symbolName: item.suggestedIcon,
-            tintToken: item.tintToken,
-            notes: item.notes,
-            isAllDay: false,
-            routineRole: item.routineRole,
-            isCompleted: item.isCompleted,
-            isStarted: item.isStarted,
-            status: item.isCompleted ? .complete : .upcoming,
-            confidence: item.isCompleted ? 1 : 0.7
         )
     }
 
