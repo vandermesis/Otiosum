@@ -1,8 +1,0 @@
-[mcp_servers.XcodeBuildMCP]
-args = [
-"-lc",
-"PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin; export NVM_DIR=\"$HOME/.nvm\"; [ -s \"$NVM_DIR/nvm.sh\" ] && . \"$NVM_DIR/nvm.sh\"; nvm use --silent >/dev/null 2>&1 || true; npx -y xcodebuildmcp@latest mcp"
-]
-command = "/bin/zsh"
-enabled = true
-tool_timeout_sec = 10000

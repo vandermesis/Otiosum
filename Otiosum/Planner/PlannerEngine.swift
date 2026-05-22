@@ -25,7 +25,7 @@ struct PlannerEngine {
         let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay) ?? startOfDay.adding(minutes: 24 * 60)
         let sleepBoundary = calendar.date(on: day, minutesFromStartOfDay: template.sleepStartMinutes)
 
-        let templateBlocks = makeTemplateBlocks(
+        let templateBlocks = RoutineBlockFactory(calendar: calendar).makeBlocks(
             for: day,
             template: template,
             budget: budget,
@@ -52,7 +52,7 @@ struct PlannerEngine {
             } == false
         }
 
-        let calendarBlocks = makeCalendarBlocks(
+        let calendarBlocks = CalendarBlockFactory().makeBlocks(
             for: day,
             calendarEvents: calendarEvents,
             calendarLinks: calendarLinks,
@@ -103,12 +103,12 @@ struct PlannerEngine {
         let finalBlocks = decorateStatuses(scheduled.blocks + allDayCalendarBlocks, context: context)
         tooMuchTodayIssues.append(contentsOf: scheduled.sleepCollisionIssues)
 
-        let budgetSummary = makeBudgetSummary(
+        let budgetSummary = BudgetSummaryFactory().makeSummary(
             blocks: finalBlocks,
             budget: budget
         )
 
-        let warnings = makeWarnings(
+        let warnings = PlannerWarningBuilder().makeWarnings(
             blocks: finalBlocks,
             tooMuchTodayIssues: tooMuchTodayIssues,
             shiftProposals: [],
@@ -273,279 +273,12 @@ struct PlannerEngine {
         .sorted(by: blockSort)
     }
 
-    private func makeTemplateBlocks(
-        for day: Date,
-        template: DayTemplateSnapshot,
-        budget: DailyBudgetSnapshot,
-        endOfDay: Date
-    ) -> [PlannedBlock] {
-        var blocks: [PlannedBlock] = []
-        let mealDuration = budget.mealDurationMinutes
-
-        let breakfast = makeTemplateBlock(
-            title: "Breakfast",
-            symbol: "fork.knife",
-            tintToken: "peach",
-            category: .meal,
-            day: day,
-            startMinutes: template.breakfastMinutes,
-            durationMinutes: mealDuration
-        )
-        let lunch = makeTemplateBlock(
-            title: "Lunch",
-            symbol: "fork.knife",
-            tintToken: "peach",
-            category: .meal,
-            day: day,
-            startMinutes: template.lunchMinutes,
-            durationMinutes: mealDuration
-        )
-        let dinner = makeTemplateBlock(
-            title: "Dinner",
-            symbol: "fork.knife",
-            tintToken: "peach",
-            category: .meal,
-            day: day,
-            startMinutes: template.dinnerMinutes,
-            durationMinutes: mealDuration
-        )
-        let quiet = makeTemplateBlock(
-            title: "Recovery",
-            symbol: "leaf.fill",
-            tintToken: "sage",
-            category: .rest,
-            day: day,
-            startMinutes: template.quietStartMinutes,
-            durationMinutes: template.quietDurationMinutes
-        )
-        let sleep = makeTemplateBlock(
-            title: "Sleep",
-            symbol: "bed.double.fill",
-            tintToken: "indigo",
-            category: .sleep,
-            day: day,
-            startMinutes: template.sleepStartMinutes,
-            end: endOfDay
-        )
-
-        blocks.append(contentsOf: [breakfast, lunch, dinner, quiet, sleep])
-
-        if template.includeWorkout {
-            blocks.append(
-                makeTemplateBlock(
-                    title: "Workout",
-                    symbol: "figure.walk",
-                    tintToken: "lime",
-                    category: .workout,
-                    day: day,
-                    startMinutes: template.workoutMinutes,
-                    durationMinutes: template.workoutDurationMinutes
-                )
-            )
-        }
-
-        return blocks.sorted(by: blockSort)
-    }
-
-    private func makeTemplateBlock(
-        title: String,
-        symbol: String,
-        tintToken: String,
-        category: RoutineRole,
-        day: Date,
-        startMinutes: Int,
-        durationMinutes: Int? = nil,
-        end: Date? = nil
-    ) -> PlannedBlock {
-        let start = calendar.date(on: day, minutesFromStartOfDay: startMinutes)
-        let endDate = end ?? start.adding(minutes: durationMinutes ?? 30)
-        return PlannedBlock(
-            id: UUID(),
-            itemID: UUID(),
-            calendarEventID: nil,
-            title: title,
-            start: start,
-            end: endDate,
-            source: .template,
-            flexibility: .flexible,
-            symbolName: symbol,
-            tintToken: tintToken,
-            notes: "",
-            isAllDay: false,
-            routineRole: category,
-            isCompleted: false,
-            isStarted: false,
-            status: .upcoming,
-            confidence: 0.7
-        )
-    }
-
-    private func makeCalendarBlocks(
-        for day: Date,
-        calendarEvents: [CalendarEventSnapshot],
-        calendarLinks: [CalendarLinkSnapshot],
-        startOfDay: Date,
-        endOfDay: Date
-    ) -> [PlannedBlock] {
-        let linksByEventID = Dictionary(uniqueKeysWithValues: calendarLinks.map { ($0.calendarEventID, $0) })
-
-        return calendarEvents.map { event in
-            let link = linksByEventID[event.id]
-            let icon = IconSuggester.suggest(for: event.title)
-            let start = max(link?.localOverrideStart ?? event.start, startOfDay)
-            let end = min(link?.localOverrideEnd ?? event.end, endOfDay)
-
-            return PlannedBlock(
-                id: UUID(),
-                itemID: UUID(),
-                calendarEventID: event.id,
-                title: event.title,
-                start: start,
-                end: max(start.adding(minutes: 15), end),
-                source: .calendar,
-                flexibility: link?.flexibility ?? .askBeforeMove,
-                symbolName: icon.symbolName,
-                tintToken: icon.tintToken,
-                notes: event.notes,
-                isAllDay: event.isAllDay,
-                routineRole: nil,
-                isCompleted: false,
-                isStarted: false,
-                status: .upcoming,
-                confidence: 0.7
-            )
-        }
-        .sorted(by: blockSort)
-    }
-
-    private func makeBudgetSummary(
-        blocks: [PlannedBlock],
-        budget: DailyBudgetSnapshot
-    ) -> BudgetUsageSummary {
-        let workMinutes = blocks
-            .filter { $0.isAllDay == false && $0.isCompleted == false }
-            .reduce(0) { $0 + $1.durationMinutes }
-        let restMinutes = blocks
-            .filter { $0.routineRole == .rest }
-            .reduce(0) { $0 + $1.durationMinutes }
-        let sleepMinutesRoutine = Int(budget.minimumSleepHours * 60)
-        let scheduledCount = blocks.filter { $0.isAllDay == false && $0.isCompleted == false }.count
-
-        return BudgetUsageSummary(
-            workMinutes: workMinutes,
-            restMinutes: restMinutes,
-            sleepMinutesRoutine: sleepMinutesRoutine,
-            scheduledCount: scheduledCount
-        )
-    }
-
-    private func makeWarnings(
-        blocks: [PlannedBlock],
-        tooMuchTodayIssues: [TooMuchTodayIssue],
-        shiftProposals: [CalendarShiftProposal],
-        budgetSummary: BudgetUsageSummary,
-        budget: DailyBudgetSnapshot,
-        template: DayTemplateSnapshot,
-        sleepBoundary: Date
-    ) -> [GuardrailWarning] {
-        var warnings: [GuardrailWarning] = []
-
-        if tooMuchTodayIssues.isEmpty == false {
-            warnings.append(
-                GuardrailWarning(
-                    message: "Not enough room today.",
-                    detail: "Otiosum found items that would cut into sleep or recovery. You can move them gently instead of squeezing more in.",
-                    severity: .attention
-                )
-            )
-        }
-
-        if shiftProposals.isEmpty == false {
-            warnings.append(
-                GuardrailWarning(
-                    message: "A calendar shift needs your choice.",
-                    detail: "A synced event was moved in the local plan so the day stays calm. Decide whether to keep that change local or update Calendar too.",
-                    severity: .calm
-                )
-            )
-        }
-
-        if budgetSummary.workMinutes > budget.targetWorkMinutes {
-            warnings.append(
-                GuardrailWarning(
-                    message: "This day is carrying a lot.",
-                    detail: "Planned work is above the target. Protecting recovery may make tomorrow feel easier.",
-                    severity: .calm
-                )
-            )
-        }
-
-        if budgetSummary.scheduledCount > budget.maxFocusItems {
-            warnings.append(
-                GuardrailWarning(
-                    message: "This is already a full list.",
-                    detail: "Consider leaving some ideas for later so the timeline stays gentle.",
-                    severity: .calm
-                )
-            )
-        }
-
-        let afterSleep = blocks.filter { $0.end > sleepBoundary }
-        if afterSleep.isEmpty == false {
-            warnings.append(
-                GuardrailWarning(
-                    message: "Protect sleep?",
-                    detail: "Some items drifted past bedtime. Otiosum can move them instead of packing the night tighter.",
-                    severity: .attention
-                )
-            )
-        }
-
-        if template.quietDurationMinutes < budget.minimumRestMinutes {
-            warnings.append(
-                GuardrailWarning(
-                    message: "Quiet time is below the rest target.",
-                    detail: "You can expand recovery time in Settings whenever the day feels too compressed.",
-                    severity: .calm
-                )
-            )
-        }
-
-        return warnings
-    }
-
     private func overlaps(
         start: Date,
         end: Date,
         with block: PlannedBlock
     ) -> Bool {
         start < block.end && end > block.start
-    }
-
-    private func shifted(
-        block: PlannedBlock,
-        start: Date,
-        end: Date
-    ) -> PlannedBlock {
-        PlannedBlock(
-            id: block.id,
-            itemID: block.itemID,
-            calendarEventID: block.calendarEventID,
-            title: block.title,
-            start: start,
-            end: end,
-            source: block.source,
-            flexibility: block.flexibility,
-            symbolName: block.symbolName,
-            tintToken: block.tintToken,
-            notes: block.notes,
-            isAllDay: block.isAllDay,
-            routineRole: block.routineRole,
-            isCompleted: block.isCompleted,
-            isStarted: block.isStarted,
-            status: block.status,
-            confidence: block.confidence
-        )
     }
 
     private func localItemSort(_ lhs: EventSnapshot, _ rhs: EventSnapshot) -> Bool {

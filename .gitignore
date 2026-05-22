@@ -122,6 +122,8 @@ xcuserdata
 
 #Agent settings
 .codex/
+QWEN.md
+AGENTS.md
 
 #Prototypes and previews
 Artifacts/
