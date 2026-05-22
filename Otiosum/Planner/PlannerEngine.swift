@@ -77,22 +77,17 @@ struct PlannerEngine {
             sleepBoundary: sleepBoundary
         )
 
-        let incompleteBlocks = finalBlocks
-            .filter { $0.isCompleted == false && $0.isAllDay == false }
-            .sorted(by: blockSort)
-
-        let nowBlock = incompleteBlocks.last(where: { context.now >= $0.start && context.now < $0.end })
-        let nextBlock = incompleteBlocks.first(where: { $0.start > context.now })
-        let laterBlocks = incompleteBlocks.filter { block in
-            block.id != nowBlock?.id && block.id != nextBlock?.id && block.start >= context.now
-        }
+        let classification = TimelineBlockClassifier().classify(
+            blocks: finalBlocks,
+            now: context.now
+        )
 
         return DayPlan(
             day: day,
             allBlocks: finalBlocks,
-            nowBlock: nowBlock,
-            nextBlock: nextBlock,
-            laterBlocks: laterBlocks,
+            nowBlock: classification.nowBlock,
+            nextBlock: classification.nextBlock,
+            laterBlocks: classification.laterBlocks,
             warnings: warnings,
             tooMuchTodayIssues: deduplicated(tooMuchTodayIssues),
             shiftProposals: [],
