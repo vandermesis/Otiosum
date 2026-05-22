@@ -96,7 +96,9 @@ final class OtiosumUITests: XCTestCase {
     @MainActor
     func testLaunchPerformance() throws {
         measure(metrics: [XCTApplicationLaunchMetric()]) {
-            _ = launchApp()
+            let app = XCUIApplication()
+            app.launchArguments = ["UITEST", "-ApplePersistenceIgnoreState", "YES"]
+            app.launch()
         }
     }
 
