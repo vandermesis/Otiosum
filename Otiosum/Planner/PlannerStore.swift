@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import os
 import SwiftData
 
 @MainActor
@@ -78,7 +79,7 @@ final class PlannerStore {
         )
 
         modelContext.insert(event)
-        try? modelContext.save()
+        modelContext.saveOrLog()
         todayQuickCapture = ""
     }
 
@@ -93,7 +94,7 @@ final class PlannerStore {
         event.preferredTimeWindow = lane.timeWindow
         event.preferredStartMinutes = lane.timeWindow.startMinutes
         event.forceAfterBedtime = false
-        try? modelContext.save()
+        modelContext.saveOrLog()
     }
 
     func saveQuickEventForLater(modelContext: ModelContext) {
@@ -118,7 +119,7 @@ final class PlannerStore {
         )
 
         modelContext.insert(event)
-        try? modelContext.save()
+        modelContext.saveOrLog()
         todayQuickCapture = ""
     }
 
@@ -131,7 +132,7 @@ final class PlannerStore {
         event.scheduledDay = day
         event.preferredStartMinutes = (event.preferredStartMinutes ?? roundedStartMinutes(template: .default)) + minutes
         event.isSavedForLater = false
-        try? modelContext.save()
+        modelContext.saveOrLog()
     }
 
     func rescheduleEvent(
@@ -145,7 +146,7 @@ final class PlannerStore {
         event.preferredTimeWindow = inferredWindow(for: start)
         event.isSavedForLater = false
         event.forceAfterBedtime = false
-        try? modelContext.save()
+        modelContext.saveOrLog()
     }
 
     func toggleCompletion(
@@ -156,7 +157,7 @@ final class PlannerStore {
         if event.isCompleted {
             event.isStarted = false
         }
-        try? modelContext.save()
+        modelContext.saveOrLog()
     }
 
     func setCompletion(
@@ -168,7 +169,7 @@ final class PlannerStore {
         if isCompleted {
             event.isStarted = false
         }
-        try? modelContext.save()
+        modelContext.saveOrLog()
     }
 
     func completeFinishedStartedEvents(
@@ -193,7 +194,7 @@ final class PlannerStore {
             event.isStarted = false
         }
 
-        try? modelContext.save()
+        modelContext.saveOrLog()
     }
 
     func startEventNow(
@@ -209,7 +210,7 @@ final class PlannerStore {
         event.isStarted = true
         event.isSavedForLater = false
         event.forceAfterBedtime = false
-        try? modelContext.save()
+        modelContext.saveOrLog()
     }
 
     func startTemplateBlockNow(
@@ -241,7 +242,7 @@ final class PlannerStore {
         )
 
         modelContext.insert(event)
-        try? modelContext.save()
+        modelContext.saveOrLog()
     }
 
     func scheduleTemplateBlock(
@@ -272,7 +273,7 @@ final class PlannerStore {
         )
 
         modelContext.insert(event)
-        try? modelContext.save()
+        modelContext.saveOrLog()
     }
 
     func adjustDuration(
@@ -283,7 +284,7 @@ final class PlannerStore {
         let minDuration = max(15, event.minimumDurationMinutes)
         let adjusted = event.targetDurationMinutes + deltaMinutes
         event.targetDurationMinutes = min(240, max(minDuration, adjusted))
-        try? modelContext.save()
+        modelContext.saveOrLog()
     }
 
     func saveEventForLater(
@@ -293,7 +294,7 @@ final class PlannerStore {
         event.isSavedForLater = true
         event.scheduledDay = nil
         event.forceAfterBedtime = false
-        try? modelContext.save()
+        modelContext.saveOrLog()
     }
 
     func updateCalendarFlexibility(
@@ -304,7 +305,7 @@ final class PlannerStore {
     ) {
         let link = calendarLink(for: calendarEventID, title: title, modelContext: modelContext)
         link.flexibility = flexibility
-        try? modelContext.save()
+        modelContext.saveOrLog()
     }
 
     func refreshPrompts(
@@ -361,7 +362,7 @@ final class PlannerStore {
             event.isSavedForLater = false
         }
 
-        try? modelContext.save()
+        modelContext.saveOrLog()
         self.pendingTooMuchToday = nil
     }
 
@@ -404,7 +405,7 @@ final class PlannerStore {
             link.localOverrideEnd = nil
         }
 
-        try? modelContext.save()
+        modelContext.saveOrLog()
         self.pendingCalendarShift = nil
     }
 
@@ -496,5 +497,26 @@ private extension String {
     var capitalizedSentence: String {
         guard isEmpty == false else { return self }
         return prefix(1).capitalized + dropFirst()
+    }
+}
+
+// MARK: - ModelContext save helper
+
+private let plannerStoreLogger = Logger(
+    subsystem: Bundle.main.bundleIdentifier ?? "com.otiosum",
+    category: "PlannerStore"
+)
+
+private extension ModelContext {
+    /// Saves the context and surfaces failures instead of silently swallowing them.
+    /// - In DEBUG builds: triggers `assertionFailure` so the problem is caught immediately.
+    /// - In all builds: logs to the system log (visible in Console.app and crash reporters).
+    func saveOrLog(function: StaticString = #function) {
+        do {
+            try save()
+        } catch {
+            plannerStoreLogger.error("ModelContext.save() failed in \(function): \(error)")
+            assertionFailure("ModelContext.save() failed in \(function): \(error)")
+        }
     }
 }
