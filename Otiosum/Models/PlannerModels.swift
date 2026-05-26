@@ -15,12 +15,16 @@ final class Event {
     var preferredTimeWindowRaw: String
     var flexibilityRaw: String
     var calendarEventID: String?
+    // Pre-V1 rename: column was "protectedCategoryRaw". Keep originalName in every
+    // VersionedSchema snapshot until a MigrationStage formally renames the column.
     @Attribute(originalName: "protectedCategoryRaw") var routineRoleRaw: String?
     var notes: String
     var isCompleted: Bool
     var isStarted: Bool = false
     var createdAt: Date
     var orderHint: Double
+    // Pre-V1 rename: column was "isArchived". Keep originalName in every
+    // VersionedSchema snapshot until a MigrationStage formally renames the column.
     @Attribute(originalName: "isArchived") var isSavedForLater: Bool
     var forceAfterBedtime: Bool
 
@@ -310,13 +314,3 @@ final class IconCatalogSymbol {
     }
 }
 
-// Keep the original placeholder model in the schema so local dev stores can open cleanly
-// while the new planner models take over the actual app behavior.
-@Model
-final class Item {
-    var timestamp: Date
-
-    init(timestamp: Date) {
-        self.timestamp = timestamp
-    }
-}

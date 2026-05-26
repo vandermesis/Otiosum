@@ -615,14 +615,12 @@ struct PlannerEngineTests {
     @MainActor
     @Test("Quick capture from Today creates a scheduled 30 minute item")
     func quickCaptureDefaults() throws {
-        let schema = Schema([
-            Item.self,
-            Event.self,
-            CalendarLink.self,
-            DayTemplate.self,
-            DailyBudget.self
-        ])
-        let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)])
+        let schema = Schema(versionedSchema: OtiosumSchemaV1.self)
+        let container = try ModelContainer(
+            for: schema,
+            migrationPlan: OtiosumMigrationPlan.self,
+            configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)]
+        )
         let context = ModelContext(container)
         let store = PlannerStore()
 

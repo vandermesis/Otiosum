@@ -794,15 +794,10 @@ struct PlannerStoreTests {
     }
 
     private func makeModelContext() throws -> ModelContext {
-        let schema = Schema([
-            Item.self,
-            Event.self,
-            CalendarLink.self,
-            DayTemplate.self,
-            DailyBudget.self
-        ])
+        let schema = Schema(versionedSchema: OtiosumSchemaV1.self)
         let container = try ModelContainer(
             for: schema,
+            migrationPlan: OtiosumMigrationPlan.self,
             configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)]
         )
         return ModelContext(container)

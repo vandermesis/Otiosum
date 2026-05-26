@@ -101,19 +101,16 @@ struct IconSuggesterTests {
     @Test("Bundled SF Symbols import into SwiftData on first bootstrap")
     @MainActor
     func importsBundledCatalogIntoSwiftData() throws {
-        let schema = Schema([
-            Item.self,
-            Event.self,
-            CalendarLink.self,
-            DayTemplate.self,
-            DailyBudget.self,
-            IconCatalogSymbol.self
-        ])
+        let schema = Schema(versionedSchema: OtiosumSchemaV1.self)
         let configuration = ModelConfiguration(
             schema: schema,
             isStoredInMemoryOnly: true
         )
-        let container = try ModelContainer(for: schema, configurations: [configuration])
+        let container = try ModelContainer(
+            for: schema,
+            migrationPlan: OtiosumMigrationPlan.self,
+            configurations: [configuration]
+        )
         let context = ModelContext(container)
 
         try AppConfiguration.seedDefaultsIfNeeded(in: context)

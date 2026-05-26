@@ -15,14 +15,20 @@ import SwiftData
 enum OtiosumSchemaV1: VersionedSchema {
     static var versionIdentifier = Schema.Version(1, 0, 0)
 
+    // Pre-V1 rename history (handled by @Attribute(originalName:) in the model):
+    //   Event.routineRoleRaw     ← was "protectedCategoryRaw"
+    //   Event.isSavedForLater    ← was "isArchived"
+    // These @Attribute(originalName:) annotations MUST be preserved in this and
+    // every subsequent VersionedSchema snapshot until a formal MigrationStage
+    // explicitly renames the underlying SQLite column and removes the annotation.
+
     static var models: [any PersistentModel.Type] {
         [
             Event.self,
             CalendarLink.self,
             DayTemplate.self,
             DailyBudget.self,
-            IconCatalogSymbol.self,
-            Item.self
+            IconCatalogSymbol.self
         ]
     }
 }
