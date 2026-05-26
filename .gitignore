@@ -136,3 +136,8 @@ Makefile
 xcodemake*
 
 # End of https://www.toptal.com/developers/gitignore/api/swiftpackagemanager,swiftpm,swift,macos
+.vscode/launch.json
+.sourcekit-lsp/config.json
+buildServer.json
+.vscode/tasks.json
+.xcodebuildmcp/

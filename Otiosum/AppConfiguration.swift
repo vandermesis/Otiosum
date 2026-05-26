@@ -150,58 +150,14 @@ enum AppConfiguration {
             return
         }
 
-        let focusIcon = IconSuggester.suggest(for: "Write proposal")
-        let relaxIcon = IconSuggester.suggest(for: "Relax")
-        let callIcon = IconSuggester.suggest(for: "Call therapist")
+        // Use a wall-clock-neutral template so that running UI tests late in the day
+        // doesn't surface overdue routine blocks as TooMuchToday sheets that cover
+        // the toolbar and block UI interactions.
+        applyUITestTemplate(template, in: context)
+
+        // Scheduled-day events are intentionally not seeded here for the same reason:
+        // their fixed times would become overdue whenever tests ran past those times.
         let ideaIcon = IconSuggester.suggest(for: "Idea garden")
-
-        context.insert(
-            Event(
-                title: "Write proposal",
-                source: .local,
-                suggestedIcon: focusIcon.symbolName,
-                tintToken: focusIcon.tintToken,
-                targetDurationMinutes: 45,
-                minimumDurationMinutes: 30,
-                scheduledDay: today,
-                preferredStartMinutes: max(template.wakeUpMinutes + 30, 9 * 60),
-                preferredTimeWindow: .morning,
-                flexibility: .flexible,
-                isSavedForLater: false
-            )
-        )
-
-        context.insert(
-            Event(
-                title: "Call therapist",
-                source: .local,
-                suggestedIcon: callIcon.symbolName,
-                tintToken: callIcon.tintToken,
-                targetDurationMinutes: 30,
-                minimumDurationMinutes: 30,
-                scheduledDay: today,
-                preferredStartMinutes: 15 * 60,
-                preferredTimeWindow: .afternoon,
-                flexibility: .askBeforeMove,
-                isSavedForLater: false
-            )
-        )
-
-        context.insert(
-            Event(
-                title: "Relax",
-                source: .local,
-                suggestedIcon: relaxIcon.symbolName,
-                tintToken: relaxIcon.tintToken,
-                targetDurationMinutes: 30,
-                minimumDurationMinutes: 20,
-                scheduledDay: today,
-                preferredStartMinutes: 18 * 60,
-                preferredTimeWindow: .evening,
-                flexibility: .flexible,
-                isSavedForLater: false
-            )
-        )
 
         context.insert(
             Event(
@@ -223,11 +179,10 @@ enum AppConfiguration {
     }
 
     @MainActor
-    private static func seedDeterministicTimelineTask(
-        in context: ModelContext,
-        template: DayTemplate,
-        today: Date
-    ) throws {
+    private static func applyUITestTemplate(
+        _ template: DayTemplate,
+        in context: ModelContext
+    ) {
         template.wakeUpMinutes = 0
         template.sleepStartMinutes = 24 * 60
         template.breakfastMinutes = 8 * 60
@@ -238,9 +193,18 @@ enum AppConfiguration {
         template.includeWorkout = false
         template.transitionBufferMinutes = 0
 
-        if let budget = try context.fetch(FetchDescriptor<DailyBudget>()).first {
+        if let budget = try? context.fetch(FetchDescriptor<DailyBudget>()).first {
             budget.mealDurationMinutes = 0
         }
+    }
+
+    @MainActor
+    private static func seedDeterministicTimelineTask(
+        in context: ModelContext,
+        template: DayTemplate,
+        today: Date
+    ) throws {
+        applyUITestTemplate(template, in: context)
 
         let now = Date.now
         let currentMinutes = now.minutesSinceStartOfDay(using: .current)

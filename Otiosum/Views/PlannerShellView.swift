@@ -264,6 +264,7 @@ struct PlannerShellView: View {
                             Button("Done") {
                                 isSettingsPresented = false
                             }
+                            .accessibilityIdentifier("settings-done")
                         }
                     }
                 }

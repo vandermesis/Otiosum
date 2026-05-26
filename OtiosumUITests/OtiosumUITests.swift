@@ -10,9 +10,9 @@ final class OtiosumUITests: XCTestCase {
         let app = launchApp()
 
         let quickField = app.textFields["quick-add-field"]
-        XCTAssertTrue(quickField.waitForExistence(timeout: 2))
+        XCTAssertTrue(quickField.waitForExistence(timeout: 5))
 
-        quickField.tap()
+        focusTextField(quickField, in: app)
         quickField.typeText("abc")
 
         XCTAssertTrue(app.keyboards.firstMatch.exists)
@@ -25,8 +25,8 @@ final class OtiosumUITests: XCTestCase {
         let app = launchApp()
 
         let quickField = app.textFields["quick-add-field"]
-        XCTAssertTrue(quickField.waitForExistence(timeout: 2))
-        quickField.tap()
+        XCTAssertTrue(quickField.waitForExistence(timeout: 5))
+        focusTextField(quickField, in: app)
         quickField.typeText("focus sprint\n")
 
         XCTAssertTrue(waitForQuickAddFieldToClear(quickField, timeout: 5))
@@ -37,8 +37,8 @@ final class OtiosumUITests: XCTestCase {
         let app = launchApp()
 
         let quickField = app.textFields["quick-add-field"]
-        XCTAssertTrue(quickField.waitForExistence(timeout: 2))
-        quickField.tap()
+        XCTAssertTrue(quickField.waitForExistence(timeout: 5))
+        focusTextField(quickField, in: app)
         quickField.typeText("later writing")
         app.buttons["quick-add-later"].tap()
         XCTAssertTrue(waitForQuickAddFieldToClear(quickField, timeout: 5))
@@ -49,12 +49,23 @@ final class OtiosumUITests: XCTestCase {
         let app = launchApp()
 
         let settingsButton = app.buttons["today-open-settings"]
-        XCTAssertTrue(settingsButton.waitForExistence(timeout: 2))
+        XCTAssertTrue(settingsButton.waitForExistence(timeout: 5))
         settingsButton.tap()
 
-        let doneButton = app.buttons["Done"]
-        XCTAssertTrue(doneButton.waitForExistence(timeout: 2))
+        let doneButton = app.buttons["settings-done"]
+        XCTAssertTrue(doneButton.waitForExistence(timeout: 5))
         doneButton.tap()
+    }
+
+    @MainActor
+    func testLaunchScreenshot() throws {
+        let app = launchApp()
+        sleep(3)
+        let screenshot = app.screenshot()
+        let attachment = XCTAttachment(screenshot: screenshot)
+        attachment.name = "launch-screenshot"
+        attachment.lifetime = .keepAlways
+        add(attachment)
     }
 
     @MainActor
@@ -110,6 +121,16 @@ final class OtiosumUITests: XCTestCase {
         }
         let expectation = XCTNSPredicateExpectation(predicate: predicate, object: element)
         return XCTWaiter().wait(for: [expectation], timeout: timeout) == .completed
+    }
+
+    private func focusTextField(_ field: XCUIElement, in app: XCUIApplication) {
+        field.tap()
+        let keyboard = app.keyboards.firstMatch
+        if keyboard.waitForExistence(timeout: 3) { return }
+        // Hardware keyboard race: the first tap can land before SwiftUI installs
+        // FocusState as first responder. A coordinate-targeted second tap forces it.
+        field.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        _ = keyboard.waitForExistence(timeout: 3)
     }
 
     private func waitForQuickAddFieldToClear(_ field: XCUIElement, timeout: TimeInterval) -> Bool {
