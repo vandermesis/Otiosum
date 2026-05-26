@@ -12,14 +12,7 @@ enum AppConfiguration {
 
     @MainActor
     static func makeModelContainer() -> ModelContainer {
-        let schema = Schema([
-            Item.self,
-            Event.self,
-            CalendarLink.self,
-            DayTemplate.self,
-            DailyBudget.self,
-            IconCatalogSymbol.self
-        ])
+        let schema = Schema(versionedSchema: OtiosumSchemaV1.self)
 
         if isUITesting {
             let inMemoryConfiguration = ModelConfiguration(
@@ -53,12 +46,20 @@ enum AppConfiguration {
                     seedUITestDataIfNeeded: false
                 )
             } catch {
+                // DEBUG: wipe and reseed so developers get a clean state when
+                // iterating on schema changes locally.
+                // RELEASE: never delete user data — rethrow and let the outer
+                // catch fall through to the in-memory fallback instead.
+                #if DEBUG
                 try resetPersistentStore(at: storeURL)
                 return try makeSeededContainer(
                     schema: schema,
                     configuration: persistentConfiguration,
                     seedUITestDataIfNeeded: false
                 )
+                #else
+                throw error
+                #endif
             }
         } catch {
             // Last-resort fallback keeps app launch resilient if persistent recovery failed.
@@ -85,7 +86,11 @@ enum AppConfiguration {
         configuration: ModelConfiguration,
         seedUITestDataIfNeeded: Bool
     ) throws -> ModelContainer {
-        let container = try ModelContainer(for: schema, configurations: [configuration])
+        let container = try ModelContainer(
+            for: schema,
+            migrationPlan: OtiosumMigrationPlan.self,
+            configurations: [configuration]
+        )
         let context = ModelContext(container)
         try seedDefaultsIfNeeded(in: context)
 
