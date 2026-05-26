@@ -9,6 +9,7 @@ import SwiftUI
 import SwiftData
 
 @main
+@MainActor
 struct OtiosumApp: App {
     @State private var sharedModelContainer = AppConfiguration.makeModelContainer()
 

@@ -19,13 +19,15 @@ final class PlannerStore {
         try IconCatalogDatabase.prepareIfNeeded(in: modelContext)
         guard didSeedDefaults == false else { return }
 
-        let templates = try modelContext.fetch(FetchDescriptor<DayTemplate>())
-        if templates.isEmpty {
+        var templateCheck = FetchDescriptor<DayTemplate>()
+        templateCheck.fetchLimit = 1
+        if try modelContext.fetch(templateCheck).isEmpty {
             modelContext.insert(DayTemplate())
         }
 
-        let budgets = try modelContext.fetch(FetchDescriptor<DailyBudget>())
-        if budgets.isEmpty {
+        var budgetCheck = FetchDescriptor<DailyBudget>()
+        budgetCheck.fetchLimit = 1
+        if try modelContext.fetch(budgetCheck).isEmpty {
             modelContext.insert(DailyBudget())
         }
 

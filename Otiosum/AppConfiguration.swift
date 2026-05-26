@@ -127,11 +127,15 @@ enum AppConfiguration {
     static func seedDefaultsIfNeeded(in context: ModelContext) throws {
         try IconCatalogDatabase.prepareIfNeeded(in: context)
 
-        if try context.fetch(FetchDescriptor<DayTemplate>()).isEmpty {
+        var templateCheck = FetchDescriptor<DayTemplate>()
+        templateCheck.fetchLimit = 1
+        if try context.fetch(templateCheck).isEmpty {
             context.insert(DayTemplate())
         }
 
-        if try context.fetch(FetchDescriptor<DailyBudget>()).isEmpty {
+        var budgetCheck = FetchDescriptor<DailyBudget>()
+        budgetCheck.fetchLimit = 1
+        if try context.fetch(budgetCheck).isEmpty {
             context.insert(DailyBudget())
         }
 
@@ -143,7 +147,9 @@ enum AppConfiguration {
         try clearExistingPlannerData(in: context)
         try seedDefaultsIfNeeded(in: context)
 
-        let template = try context.fetch(FetchDescriptor<DayTemplate>()).first ?? DayTemplate()
+        var templateDescriptor = FetchDescriptor<DayTemplate>(sortBy: [SortDescriptor(\.key)])
+        templateDescriptor.fetchLimit = 1
+        let template = try context.fetch(templateDescriptor).first ?? DayTemplate()
         if template.modelContext == nil {
             context.insert(template)
         }
@@ -198,7 +204,9 @@ enum AppConfiguration {
         template.includeWorkout = false
         template.transitionBufferMinutes = 0
 
-        if let budget = try? context.fetch(FetchDescriptor<DailyBudget>()).first {
+        var budgetDescriptor = FetchDescriptor<DailyBudget>(sortBy: [SortDescriptor(\.key)])
+        budgetDescriptor.fetchLimit = 1
+        if let budget = try? context.fetch(budgetDescriptor).first {
             budget.mealDurationMinutes = 0
         }
     }
