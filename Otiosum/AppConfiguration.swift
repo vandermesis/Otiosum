@@ -164,7 +164,7 @@ enum AppConfiguration {
         // Use a wall-clock-neutral template so that running UI tests late in the day
         // doesn't surface overdue routine blocks as TooMuchToday sheets that cover
         // the toolbar and block UI interactions.
-        applyUITestTemplate(template, in: context)
+        try applyUITestTemplate(template, in: context)
 
         // Scheduled-day events are intentionally not seeded here for the same reason:
         // their fixed times would become overdue whenever tests ran past those times.
@@ -193,7 +193,7 @@ enum AppConfiguration {
     private static func applyUITestTemplate(
         _ template: DayTemplate,
         in context: ModelContext
-    ) {
+    ) throws {
         template.wakeUpMinutes = 0
         template.sleepStartMinutes = 24 * 60
         template.breakfastMinutes = 8 * 60
@@ -206,7 +206,7 @@ enum AppConfiguration {
 
         var budgetDescriptor = FetchDescriptor<DailyBudget>(sortBy: [SortDescriptor(\.key)])
         budgetDescriptor.fetchLimit = 1
-        if let budget = try? context.fetch(budgetDescriptor).first {
+        if let budget = try context.fetch(budgetDescriptor).first {
             budget.mealDurationMinutes = 0
         }
     }
@@ -217,7 +217,7 @@ enum AppConfiguration {
         template: DayTemplate,
         today: Date
     ) throws {
-        applyUITestTemplate(template, in: context)
+        try applyUITestTemplate(template, in: context)
 
         let now = Date.now
         let currentMinutes = now.minutesSinceStartOfDay(using: .current)
